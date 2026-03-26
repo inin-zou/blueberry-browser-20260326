@@ -68,7 +68,7 @@ export const PAGE_REWRITER_SCRIPT = `
       'right:0',
       'width:100%',
       'z-index:' + Z_INDEX,
-      'pointer-events:none',
+      'pointer-events:auto',
     ].join(';');
 
     var shadow = host.attachShadow({ mode: 'open' });
