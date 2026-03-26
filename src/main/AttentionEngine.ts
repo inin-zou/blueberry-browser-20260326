@@ -91,8 +91,11 @@ export class AttentionEngine {
       (entry) => now - entry.timestamp < TAB_SWITCH_WINDOW_MS
     )
 
-    // Count unique tab switches
+    console.log(`[Attention] Tab switch to ${data.tabId}, ${this.tabSwitchLog.length} switches in window (need ${TAB_SWITCH_COUNT_THRESHOLD})`)
+
+    // Count tab switches in window
     if (this.tabSwitchLog.length >= TAB_SWITCH_COUNT_THRESHOLD) {
+      console.log(`[Attention] Comparing intent detected! ${this.tabSwitchLog.length} switches`)
       this.emitSignal({
         type: 'tab_switch',
         data: {
