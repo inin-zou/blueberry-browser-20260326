@@ -55,6 +55,12 @@ interface SidebarAPI {
   // Sandbox execution
   executeSandbox: (script: string) => Promise<SandboxResult>;
   applySandbox: (script: string) => void;
+
+  // Workflow recording
+  startRecording: () => Promise<{ recording: boolean }>;
+  stopRecording: () => Promise<{ recording: any; summaryPrompt: string } | null>;
+  getRecordingStatus: () => Promise<{ isRecording: boolean; actionCount: number }>;
+  saveWorkflow: (data: { recording: any; name: string; summary: string }) => Promise<{ saved: boolean; id: string }>;
 }
 
 declare global {

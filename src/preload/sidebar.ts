@@ -71,6 +71,12 @@ const sidebarAPI = {
 
   applySandbox: (script: string) =>
     electronAPI.ipcRenderer.send('sandbox:apply', { script }),
+
+  // Workflow recording
+  startRecording: () => electronAPI.ipcRenderer.invoke('workflow:start-recording'),
+  stopRecording: () => electronAPI.ipcRenderer.invoke('workflow:stop-recording'),
+  getRecordingStatus: () => electronAPI.ipcRenderer.invoke('workflow:get-status'),
+  saveWorkflow: (data: any) => electronAPI.ipcRenderer.invoke('workflow:save', data),
 };
 
 // Use `contextBridge` APIs to expose Electron APIs to
