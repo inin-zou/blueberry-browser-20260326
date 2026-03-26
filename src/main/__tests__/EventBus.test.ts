@@ -68,4 +68,15 @@ describe('EventBus', () => {
     expect(h1).not.toHaveBeenCalled()
     expect(h2).not.toHaveBeenCalled()
   })
+
+  it('continues delivering to other subscribers when one throws', () => {
+    const bus = new EventBus()
+    const badHandler = vi.fn(() => { throw new Error('boom') })
+    const goodHandler = vi.fn()
+    bus.on('ch', badHandler)
+    bus.on('ch', goodHandler)
+    bus.emit('ch', { data: 'test' })
+    expect(badHandler).toHaveBeenCalled()
+    expect(goodHandler).toHaveBeenCalled()
+  })
 })
