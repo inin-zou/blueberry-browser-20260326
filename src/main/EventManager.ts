@@ -96,7 +96,12 @@ export class EventManager {
   }
 
   private handleRrwebEvents(): void {
+    let rrwebEventCount = 0;
     ipcMain.on('rrweb:event', (_event, data) => {
+      rrwebEventCount++;
+      if (rrwebEventCount <= 3 || rrwebEventCount % 100 === 0) {
+        console.log(`[rrweb] Event #${rrwebEventCount} type=${data?.type} source=${data?.data?.source}`);
+      }
       this.mainWindow.eventBus.emit('rrweb:event', data);
       this.mainWindow.ringBuffer.push(data);
     });
