@@ -42,9 +42,13 @@ export class TabSynthesizer {
     if (signal.intentGuess !== 'comparing' || signal.type !== 'tab_switch') return
 
     const now = Date.now()
-    if (now - this.lastSynthesisTime < TabSynthesizer.COOLDOWN_MS) return
+    if (now - this.lastSynthesisTime < TabSynthesizer.COOLDOWN_MS) {
+      console.log(`[Synthesis] Cooldown active, skipping offer`)
+      return
+    }
     this.lastSynthesisTime = now
 
+    console.log(`[Synthesis] Emitting synthesis offer for ${signal.data.switchCount} tabs`)
     // Emit an offer to synthesize (sidebar will show a prompt)
     this.eventBus.emit('synthesis:offer', {
       tabCount: signal.data.switchCount || 0,
