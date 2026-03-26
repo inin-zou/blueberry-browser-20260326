@@ -118,9 +118,20 @@ export class LocalModelManager {
         console.log(JSON.stringify({ type: 'model-loading' }));
 
         // Load quantized Qwen2.5-0.5B-Instruct from HuggingFace Hub (~460 MB, cached after first run)
+        // Try WebGPU first, fall back to WASM if unavailable
+        let device = 'wasm';
+        try {
+          if (navigator.gpu) {
+            const adapter = await navigator.gpu.requestAdapter();
+            if (adapter) device = 'webgpu';
+          }
+        } catch (e) { /* WebGPU not available, use WASM */ }
+
+        console.log(JSON.stringify({ type: 'model-loading', device }));
+
         generator = await pipeline('text-generation', 'onnx-community/Qwen2.5-0.5B-Instruct', {
-          dtype: 'q4f16',
-          device: 'webgpu',
+          dtype: device === 'webgpu' ? 'q4f16' : 'q4',
+          device: device,
         });
 
         console.log(JSON.stringify({ type: 'model-ready' }));
