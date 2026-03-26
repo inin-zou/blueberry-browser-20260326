@@ -1,3 +1,4 @@
+import { join } from "path";
 import { NativeImage, WebContentsView } from "electron";
 
 export class Tab {
@@ -19,6 +20,7 @@ export class Tab {
         contextIsolation: true,
         sandbox: true,
         webSecurity: true,
+        preload: join(__dirname, '../preload/tab.js'),
       },
     });
 
