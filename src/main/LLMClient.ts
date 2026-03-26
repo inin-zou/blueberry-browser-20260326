@@ -298,12 +298,45 @@ export class LLMClient {
           }
           if (toolResults && toolResults.length > 0) {
             for (const tr of toolResults) {
-              console.log(`[Browser Tool Result] ${tr.toolName}: ${JSON.stringify(tr.result).substring(0, 200)}`);
+              console.log(`[Browser Tool Result] ${tr.toolName}: ${JSON.stringify(tr.result).substring(0, 500)}`);
               const res = tr.result as any;
-              if (res?.success) {
-                toolActions.push(`Result: ${res.clicked || res.navigatedTo || res.typed || res.scrolled || 'done'}`);
-              } else if (res?.error) {
+              if (res?.success === false && res?.error) {
                 toolActions.push(`Error: ${res.error}`);
+              } else if (res?.success) {
+                // Format result based on tool type
+                if (res.clicked) {
+                  toolActions.push(`Clicked: ${res.clicked}`);
+                } else if (res.navigatedTo) {
+                  toolActions.push(`Navigated to: ${res.navigatedTo}`);
+                } else if (res.typed) {
+                  toolActions.push(`Typed: "${res.typed}"`);
+                } else if (res.scrolled) {
+                  toolActions.push(`Scrolled ${res.scrolled} ${res.pixels}px`);
+                } else if (res.output !== undefined) {
+                  // Sandbox or run_javascript result — show the actual data
+                  const outputStr = typeof res.output === 'string'
+                    ? res.output
+                    : JSON.stringify(res.output, null, 2);
+                  const truncated = outputStr.length > 1500
+                    ? outputStr.substring(0, 1500) + '\n... (truncated)'
+                    : outputStr;
+                  if (res.description) {
+                    toolActions.push(`**${res.description}:**\n\`\`\`json\n${truncated}\n\`\`\``);
+                  } else {
+                    toolActions.push(`Result:\n\`\`\`json\n${truncated}\n\`\`\``);
+                  }
+                } else if (res.content) {
+                  // read_page result
+                  toolActions.push(`Page content (${res.title}):\n${res.content.substring(0, 500)}...`);
+                } else if (res.elements) {
+                  // get_page_elements result
+                  const summary = res.elements.slice(0, 10).map((e: any) =>
+                    `- [${e.type}] ${e.text || e.name || e.placeholder || ''} (${e.selector})`
+                  ).join('\n');
+                  toolActions.push(`Found ${res.count} elements:\n${summary}`);
+                } else {
+                  toolActions.push(`Done`);
+                }
               }
             }
           }
