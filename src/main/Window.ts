@@ -7,6 +7,7 @@ import { RrwebRingBuffer } from "./RrwebRingBuffer";
 import { AIEventLog } from "./AIEventLog";
 import { InjectionRegistry } from "./InjectionRegistry";
 import { buildGhostTextScript } from "./scripts/ghost-text-script";
+import { RRWEB_CAPTURE_SCRIPT } from "./scripts/rrweb-capture-script";
 import { SELECTION_PILL_SCRIPT } from "./scripts/selection-pill-script";
 import { PAGE_ANNOTATIONS_SCRIPT } from "./scripts/page-annotations-script";
 import { PAGE_REWRITER_SCRIPT } from "./scripts/page-rewriter-script";
@@ -37,6 +38,8 @@ export class Window {
     this.injectionRegistry = services.injectionRegistry;
 
     // Register shared injected scripts
+    // rrweb-capture must be registered first so the event stream is active before other scripts run
+    this.injectionRegistry.register('rrweb-capture', RRWEB_CAPTURE_SCRIPT);
     this.injectionRegistry.register('selection-pill', SELECTION_PILL_SCRIPT);
     this.injectionRegistry.register('page-annotations', PAGE_ANNOTATIONS_SCRIPT);
     this.injectionRegistry.register('page-rewriter', PAGE_REWRITER_SCRIPT);
@@ -218,6 +221,9 @@ export class Window {
     // Show the new active tab
     tab.show();
     this.activeTabId = tabId;
+
+    // Notify all subscribers that the active tab has changed
+    this.eventBus.emit('tab:switched', { tabId, timestamp: Date.now() });
 
     // Update the window title to match the tab title
     this._baseWindow.setTitle(tab.title || "Blueberry Browser");
