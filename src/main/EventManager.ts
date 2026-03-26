@@ -344,7 +344,7 @@ export class EventManager {
   }
 
   private handleSelectionEvents(): void {
-    ipcMain.on('selection:action', (_event, data: { action: string; text: string; url: string; context: string }) => {
+    ipcMain.on('selection:action', async (_event, data: { action: string; text: string; url: string; context: string }) => {
       if (data.action === 'ask') {
         const sidebar = this.mainWindow.sidebar;
         if (!sidebar.getIsVisible()) {
@@ -358,18 +358,66 @@ export class EventManager {
           mode: 'ask',
         });
       } else if (data.action === 'explain') {
-        // Route "explain" same as "ask" — local model will handle this in Phase 7
-        const sidebar = this.mainWindow.sidebar;
-        if (!sidebar.getIsVisible()) {
-          sidebar.toggle();
-          this.mainWindow.updateAllBounds();
+        // Inline explain — send brief explanation back to the tab (no sidebar)
+        const tab = this.mainWindow.activeTab;
+        if (!tab) return;
+
+        try {
+          const { streamText } = await import('ai');
+          const { anthropic } = await import('@ai-sdk/anthropic');
+
+          const result = await streamText({
+            model: anthropic('claude-sonnet-4-6'),
+            messages: [
+              {
+                role: 'system',
+                content: 'You are a concise knowledge assistant. Explain the given text in 1-2 short sentences. No emojis. No markdown. Plain text only. Be direct and informative.',
+              },
+              {
+                role: 'user',
+                content: `Explain this briefly: "${data.text}"\n\nContext from the page: ${data.context.substring(0, 500)}`,
+              },
+            ],
+            temperature: 0.3,
+            maxTokens: 100,
+          });
+
+          let explanation = '';
+          for await (const chunk of result.textStream) {
+            explanation += chunk;
+          }
+
+          // Send response back to the tab for inline rendering
+          tab.webContents.send('page:explain-response', {
+            text: data.text,
+            explanation: explanation.trim(),
+          });
+
+          // Log to AIEventLog
+          this.mainWindow.aiEventLog.log({
+            id: `explain-${Date.now()}`,
+            timestamp: Date.now(),
+            tabId: tab.id,
+            type: 'selection-explain',
+            trigger: { source: 'selection', userInput: data.text },
+            output: { model: 'cloud', content: explanation.trim(), latencyMs: 0 },
+            disposition: 'pending',
+          });
+        } catch (err) {
+          console.error('Inline explain error:', err);
+          // Fallback: open sidebar instead
+          const sidebar = this.mainWindow.sidebar;
+          if (!sidebar.getIsVisible()) {
+            sidebar.toggle();
+            this.mainWindow.updateAllBounds();
+          }
+          sidebar.view.webContents.send('sidebar:open-with-context', {
+            text: data.text,
+            url: data.url,
+            context: data.context,
+            mode: 'explain',
+          });
         }
-        sidebar.view.webContents.send('sidebar:open-with-context', {
-          text: data.text,
-          url: data.url,
-          context: data.context,
-          mode: 'explain',
-        });
       }
     });
   }

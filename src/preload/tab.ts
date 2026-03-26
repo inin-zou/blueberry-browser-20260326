@@ -12,6 +12,7 @@ const RECEIVE_CHANNELS = [
   'attention:command',
   'page:rewrite',
   'page:restore',
+  'page:explain-response',
 ] as const
 
 type SendChannel = (typeof SEND_CHANNELS)[number]
