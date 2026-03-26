@@ -357,15 +357,7 @@ export class EventManager {
       const profile = this.profileBuilder.build(allEntries, browserIds);
       const urlCompletions = this.profileBuilder.toUrlCompletions(allEntries);
 
-      // Persist profile and URL completions to storage
-      if (this.mainWindow.storage) {
-        await this.mainWindow.storage.saveProfile({ key: 'userProfile', value: profile });
-        if (urlCompletions.length > 0) {
-          await this.mainWindow.storage.saveUrls(urlCompletions);
-        }
-      }
-
-      // Feed interests into the sidebar LLM client
+      // Feed interests into the sidebar LLM client for personalization
       this.mainWindow.sidebar.client.setUserProfile(profile.inferredInterests);
 
       return { profile, urlCount: urlCompletions.length };
