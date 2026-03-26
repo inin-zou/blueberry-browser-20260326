@@ -261,6 +261,66 @@ const ConversationTurnComponent: React.FC<{
     </div>
 )
 
+// Quick-action toolbar for page tools
+const QuickActionBar: React.FC = () => {
+    const [isRecording, setIsRecording] = useState(false)
+    const [rewriting, setRewriting] = useState(false)
+
+    const handleSummarizePage = async () => {
+        if (rewriting) return
+        setRewriting(true)
+        try {
+            await window.sidebarAPI.rewritePage()
+        } catch (err) {
+            console.error('Page rewrite failed:', err)
+        } finally {
+            setRewriting(false)
+        }
+    }
+
+    const handleToggleRecording = async () => {
+        try {
+            if (isRecording) {
+                const result = await window.sidebarAPI.stopRecording()
+                setIsRecording(false)
+                if (result?.recording) {
+                    window.dispatchEvent(new CustomEvent('sidebar:workflow-recorded', { detail: result.recording }))
+                }
+            } else {
+                await window.sidebarAPI.startRecording()
+                setIsRecording(true)
+            }
+        } catch (err) {
+            console.error('Workflow recording error:', err)
+            setIsRecording(false)
+        }
+    }
+
+    return (
+        <div className="flex items-center gap-2 px-4 py-2 border-t border-white/5">
+            <button
+                onClick={handleSummarizePage}
+                disabled={rewriting}
+                className="text-[10px] text-[#918fa0] hover:text-[#c2c1ff] px-2 py-1 rounded hover:bg-white/5 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Summarize current page"
+            >
+                {rewriting ? 'Rewriting...' : 'Summarize Page'}
+            </button>
+            <button
+                onClick={handleToggleRecording}
+                className={`text-[10px] px-2 py-1 rounded transition-all ${
+                    isRecording
+                        ? 'text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20'
+                        : 'text-[#918fa0] hover:text-[#c2c1ff] hover:bg-white/5'
+                }`}
+                title={isRecording ? 'Stop recording workflow' : 'Record workflow'}
+            >
+                {isRecording ? 'Stop Recording' : 'Record Workflow'}
+            </button>
+        </div>
+    )
+}
+
 // Main Chat Component
 export const Chat: React.FC = () => {
     const { messages, isLoading, sendMessage, clearChat } = useChat()
@@ -338,6 +398,9 @@ export const Chat: React.FC = () => {
                     <div ref={scrollRef} />
                 </div>
             </div>
+
+            {/* Quick Actions */}
+            <QuickActionBar />
 
             {/* Input Area */}
             <div className="p-4">

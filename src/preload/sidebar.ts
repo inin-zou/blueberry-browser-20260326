@@ -86,6 +86,14 @@ const sidebarAPI = {
   stopRecording: () => electronAPI.ipcRenderer.invoke('workflow:stop-recording'),
   getRecordingStatus: () => electronAPI.ipcRenderer.invoke('workflow:get-status'),
   saveWorkflow: (data: any) => electronAPI.ipcRenderer.invoke('workflow:save', data),
+
+  // History import
+  getAvailableBrowsers: () => electronAPI.ipcRenderer.invoke('history:available-browsers'),
+  importHistory: (browserIds: string[]) => electronAPI.ipcRenderer.invoke('history:import', browserIds),
+
+  // Page rewrite
+  rewritePage: () => electronAPI.ipcRenderer.invoke('page:rewrite'),
+  restorePage: () => electronAPI.ipcRenderer.send('page:restore'),
 };
 
 // Use `contextBridge` APIs to expose Electron APIs to
