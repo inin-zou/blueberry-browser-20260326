@@ -1,11 +1,14 @@
 import { ipcMain, WebContents } from "electron";
 import type { Window } from "./Window";
+import { CompletionEngine } from "./CompletionEngine";
 
 export class EventManager {
   private mainWindow: Window;
+  private completionEngine: CompletionEngine;
 
   constructor(mainWindow: Window) {
     this.mainWindow = mainWindow;
+    this.completionEngine = new CompletionEngine(this.mainWindow.aiEventLog);
     this.setupEventHandlers();
   }
 
@@ -27,12 +30,30 @@ export class EventManager {
 
     // rrweb events from tab preload bridge
     this.handleRrwebEvents();
+
+    // Ghost text completion events
+    this.handleCompletionEvents();
   }
 
   private handleRrwebEvents(): void {
     ipcMain.on('rrweb:event', (_event, data) => {
       this.mainWindow.eventBus.emit('rrweb:event', data);
       this.mainWindow.ringBuffer.push(data);
+    });
+  }
+
+  private handleCompletionEvents(): void {
+    ipcMain.on('completion:request', async (_event, data) => {
+      // Ignore internal acceptance signals sent by the ghost-text script
+      if (data && data._accepted) return;
+
+      const tab = (data && data.tabId ? this.mainWindow.getTab(data.tabId) : null)
+        ?? this.mainWindow.activeTab;
+
+      const result = await this.completionEngine.complete(data, tab);
+      if (result && tab) {
+        tab.webContents.send('completion:response', result);
+      }
     });
   }
 
