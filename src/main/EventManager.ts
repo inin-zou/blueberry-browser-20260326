@@ -368,10 +368,10 @@ export class EventManager {
 
         try {
           const { streamText } = await import('ai');
-          const { anthropic } = await import('@ai-sdk/anthropic');
+          const { getModel } = await import('./llm-provider');
 
           const result = await streamText({
-            model: anthropic('claude-sonnet-4-6'),
+            model: getModel(),
             messages: [
               {
                 role: 'system',
@@ -432,14 +432,21 @@ export class EventManager {
     });
 
     ipcMain.handle('history:import', async (_event, browserIds: string[]) => {
+      console.log(`[History Import] Starting import for browsers: ${browserIds.join(', ')}`);
       let allEntries: RawHistoryEntry[] = [];
       for (const id of browserIds) {
+        console.log(`[History Import] Reading ${id} history...`);
         const entries = await this.historyImporter.importBrowser(id);
+        console.log(`[History Import] ${id}: found ${entries.length} URLs`);
         allEntries = allEntries.concat(entries);
       }
 
+      console.log(`[History Import] Total: ${allEntries.length} URLs. Building profile...`);
       const profile = this.profileBuilder.build(allEntries, browserIds);
       const urlCompletions = this.profileBuilder.toUrlCompletions(allEntries);
+
+      console.log(`[History Import] Profile built. Top domains: ${profile.topDomains.slice(0, 5).map(d => d.domain).join(', ')}`);
+      console.log(`[History Import] Inferred interests: ${profile.inferredInterests.join(', ')}`);
 
       // Feed interests into the sidebar LLM client for personalization
       this.mainWindow.sidebar.client.setUserProfile(profile.inferredInterests);

@@ -73,7 +73,7 @@ export class PageRewriter {
 
     try {
       const { streamText } = await import('ai')
-      const { anthropic } = await import('@ai-sdk/anthropic')
+      const { getModel } = await import('./llm-provider')
 
       let systemPrompt = ''
       if (pageType === 'article') {
@@ -108,7 +108,7 @@ Highlight anything unusual or noteworthy.`
 
       const startMs = Date.now()
       const result = await streamText({
-        model: anthropic('claude-sonnet-4-6'),
+        model: getModel(),
         messages: [
           { role: 'system', content: systemPrompt },
           {
