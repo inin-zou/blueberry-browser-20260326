@@ -1,19 +1,21 @@
-import { tool } from 'ai'
-import { z } from 'zod'
+import { tool, jsonSchema } from 'ai'
 import type { Window } from './Window'
 
 /**
- * Browser action tools for the LLM.
- * These let the AI take actions in the active tab.
+ * Browser action tools using jsonSchema (not zod) for OpenAI compatibility.
  */
 export function createBrowserTools(getWindow: () => Window | null) {
   return {
     click: tool({
       description: 'Click an element on the current page by CSS selector.',
-      parameters: z.object({
-        selector: z.string().describe('CSS selector of the element to click'),
+      inputSchema: jsonSchema<{ selector: string }>({
+        type: 'object',
+        properties: {
+          selector: { type: 'string', description: 'CSS selector of the element to click' },
+        },
+        required: ['selector'],
       }),
-      execute: async ({ selector }: { selector: string }) => {
+      execute: async ({ selector }) => {
         const tab = getWindow()?.activeTab
         if (!tab) return { success: false, error: 'No active tab' }
         try {
@@ -33,11 +35,15 @@ export function createBrowserTools(getWindow: () => Window | null) {
 
     type_text: tool({
       description: 'Type text into an input field by CSS selector.',
-      parameters: z.object({
-        selector: z.string().describe('CSS selector of the input field'),
-        text: z.string().describe('Text to type'),
+      inputSchema: jsonSchema<{ selector: string; text: string }>({
+        type: 'object',
+        properties: {
+          selector: { type: 'string', description: 'CSS selector of the input field' },
+          text: { type: 'string', description: 'Text to type' },
+        },
+        required: ['selector', 'text'],
       }),
-      execute: async ({ selector, text }: { selector: string; text: string }) => {
+      execute: async ({ selector, text }) => {
         const tab = getWindow()?.activeTab
         if (!tab) return { success: false, error: 'No active tab' }
         try {
@@ -60,10 +66,14 @@ export function createBrowserTools(getWindow: () => Window | null) {
 
     navigate: tool({
       description: 'Navigate the active tab to a URL.',
-      parameters: z.object({
-        url: z.string().describe('URL to navigate to'),
+      inputSchema: jsonSchema<{ url: string }>({
+        type: 'object',
+        properties: {
+          url: { type: 'string', description: 'URL to navigate to' },
+        },
+        required: ['url'],
       }),
-      execute: async ({ url }: { url: string }) => {
+      execute: async ({ url }) => {
         const tab = getWindow()?.activeTab
         if (!tab) return { success: false, error: 'No active tab' }
         try {
@@ -81,11 +91,15 @@ export function createBrowserTools(getWindow: () => Window | null) {
 
     scroll: tool({
       description: 'Scroll the page up or down.',
-      parameters: z.object({
-        direction: z.enum(['up', 'down']).describe('Scroll direction'),
-        pixels: z.number().default(500).describe('Pixels to scroll'),
+      inputSchema: jsonSchema<{ direction: string; pixels: number }>({
+        type: 'object',
+        properties: {
+          direction: { type: 'string', enum: ['up', 'down'], description: 'Scroll direction' },
+          pixels: { type: 'number', description: 'Pixels to scroll, default 500' },
+        },
+        required: ['direction'],
       }),
-      execute: async ({ direction, pixels }: { direction: string; pixels?: number }) => {
+      execute: async ({ direction, pixels }) => {
         const tab = getWindow()?.activeTab
         if (!tab) return { success: false, error: 'No active tab' }
         const px = pixels || 500
@@ -101,10 +115,14 @@ export function createBrowserTools(getWindow: () => Window | null) {
 
     read_page: tool({
       description: 'Read the text content of the current page.',
-      parameters: z.object({
-        max_length: z.number().default(3000).describe('Max chars to return'),
+      inputSchema: jsonSchema<{ max_length: number }>({
+        type: 'object',
+        properties: {
+          max_length: { type: 'number', description: 'Max chars to return, default 3000' },
+        },
+        required: [],
       }),
-      execute: async ({ max_length }: { max_length?: number }) => {
+      execute: async ({ max_length }) => {
         const tab = getWindow()?.activeTab
         if (!tab) return { success: false, error: 'No active tab' }
         try {
@@ -119,10 +137,14 @@ export function createBrowserTools(getWindow: () => Window | null) {
 
     run_javascript: tool({
       description: 'Execute JavaScript on the current page and return the result.',
-      parameters: z.object({
-        code: z.string().describe('JavaScript code to execute'),
+      inputSchema: jsonSchema<{ code: string }>({
+        type: 'object',
+        properties: {
+          code: { type: 'string', description: 'JavaScript code to execute' },
+        },
+        required: ['code'],
       }),
-      execute: async ({ code }: { code: string }) => {
+      execute: async ({ code }) => {
         const tab = getWindow()?.activeTab
         if (!tab) return { success: false, error: 'No active tab' }
         try {
@@ -136,10 +158,14 @@ export function createBrowserTools(getWindow: () => Window | null) {
 
     get_page_elements: tool({
       description: 'List interactive elements (buttons, links, inputs) on the page.',
-      parameters: z.object({
-        element_type: z.enum(['buttons', 'links', 'inputs', 'all']).default('all').describe('Type of elements'),
+      inputSchema: jsonSchema<{ element_type: string }>({
+        type: 'object',
+        properties: {
+          element_type: { type: 'string', enum: ['buttons', 'links', 'inputs', 'all'], description: 'Type of elements, default all' },
+        },
+        required: [],
       }),
-      execute: async ({ element_type }: { element_type?: string }) => {
+      execute: async ({ element_type }) => {
         const tab = getWindow()?.activeTab
         if (!tab) return { success: false, error: 'No active tab' }
         try {
