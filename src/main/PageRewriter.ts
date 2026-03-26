@@ -75,34 +75,27 @@ export class PageRewriter {
       const { streamText } = await import('ai')
       const { getModel } = await import('./llm-provider')
 
+      const keyPointsSchema = `Each key point must have a "text" (the point) and "anchor" (a short phrase from a heading or paragraph on the page that can be used to find and scroll to the relevant section). Example:
+{
+  "tldr": "Summary here",
+  "keyPoints": [
+    {"text": "Key point description", "anchor": "Exact heading or phrase from the page"},
+    {"text": "Another point", "anchor": "Another heading from the page"}
+  ]
+}`
+
       let systemPrompt = ''
       if (pageType === 'article') {
-        systemPrompt = `Analyze this article and provide a JSON response with:
-{
-  "tldr": "1-2 sentence TL;DR summary",
-  "keyPoints": ["key point 1", "key point 2", "key point 3", "key point 4", "key point 5"]
-}
-Be concise and accurate. Max 5 key points.`
+        systemPrompt = `Analyze this article and provide a JSON response. ${keyPointsSchema}
+Be concise and accurate. Max 5 key points. The "anchor" must be an exact phrase or heading that appears in the page content.`
       } else if (pageType === 'documentation') {
-        systemPrompt = `Analyze this documentation page and provide a JSON response with:
-{
-  "tldr": "What this page covers in 1 sentence",
-  "keyPoints": ["Most important concept 1", "Most important concept 2", "Most important concept 3"]
-}
-Focus on what a developer needs to know most.`
+        systemPrompt = `Analyze this documentation page and provide a JSON response. ${keyPointsSchema}
+Focus on what a developer needs to know most. The "anchor" must match actual section headings from the docs.`
       } else if (pageType === 'product') {
-        systemPrompt = `Analyze this product page and provide a JSON response with:
-{
-  "tldr": "Product name — price — one sentence verdict",
-  "keyPoints": ["Key spec 1", "Key spec 2", "Pro: ...", "Con: ..."]
-}
+        systemPrompt = `Analyze this product page and provide a JSON response. ${keyPointsSchema}
 Focus on purchase-decision information.`
       } else if (pageType === 'dashboard') {
-        systemPrompt = `Analyze this dashboard and provide a JSON response with:
-{
-  "tldr": "Overall status in 1 sentence",
-  "keyPoints": ["Key metric or anomaly 1", "Key metric or anomaly 2", "Key metric or anomaly 3"]
-}
+        systemPrompt = `Analyze this dashboard and provide a JSON response. ${keyPointsSchema}
 Highlight anything unusual or noteworthy.`
       }
 
@@ -157,14 +150,27 @@ Highlight anything unusual or noteworthy.`
 
   private parseRewriteResponse(
     response: string
-  ): { tldr?: string; keyPoints?: string[] } | null {
+  ): { tldr?: string; keyPoints?: { text: string; anchor: string }[] } | null {
     try {
       const jsonMatch = response.match(/\{[\s\S]*\}/)
       if (!jsonMatch) return null
       const parsed = JSON.parse(jsonMatch[0])
+
+      let keyPoints: { text: string; anchor: string }[] | undefined
+      if (Array.isArray(parsed.keyPoints)) {
+        keyPoints = parsed.keyPoints.map((kp: any) => {
+          if (typeof kp === 'string') {
+            // Old format: plain string — use the text as anchor too
+            return { text: kp, anchor: kp.substring(0, 40) }
+          }
+          // New format: { text, anchor }
+          return { text: kp.text || kp, anchor: kp.anchor || '' }
+        })
+      }
+
       return {
         tldr: parsed.tldr || undefined,
-        keyPoints: Array.isArray(parsed.keyPoints) ? parsed.keyPoints : undefined,
+        keyPoints,
       }
     } catch {
       return null

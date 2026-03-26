@@ -198,6 +198,40 @@ export const PAGE_REWRITER_SCRIPT = `
       'display:none',
     ].join(';');
 
+    // Helper: find an element on the page containing the anchor text and scroll to it
+    function scrollToAnchor(anchor) {
+      if (!anchor) return;
+      // Try headings first
+      var headings = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
+      for (var i = 0; i < headings.length; i++) {
+        if (headings[i].textContent && headings[i].textContent.toLowerCase().indexOf(anchor.toLowerCase()) !== -1) {
+          headings[i].scrollIntoView({ behavior: 'smooth', block: 'center' });
+          // Brief highlight
+          var origBg = headings[i].style.backgroundColor;
+          headings[i].style.backgroundColor = 'rgba(94, 92, 230, 0.2)';
+          headings[i].style.transition = 'background-color 0.5s ease';
+          setTimeout(function() { headings[i].style.backgroundColor = origBg; }, 2000);
+          return;
+        }
+      }
+      // Fallback: search all text nodes
+      var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null);
+      while (walker.nextNode()) {
+        var node = walker.currentNode;
+        if (node.textContent && node.textContent.toLowerCase().indexOf(anchor.toLowerCase()) !== -1) {
+          var parent = node.parentElement;
+          if (parent) {
+            parent.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            var origBg2 = parent.style.backgroundColor;
+            parent.style.backgroundColor = 'rgba(94, 92, 230, 0.2)';
+            parent.style.transition = 'background-color 0.5s ease';
+            setTimeout(function() { parent.style.backgroundColor = origBg2; }, 2000);
+          }
+          return;
+        }
+      }
+    }
+
     if (keyPoints.length > 0) {
       row.appendChild(toggleBtn);
 
@@ -212,12 +246,14 @@ export const PAGE_REWRITER_SCRIPT = `
       ].join(';');
 
       keyPoints.forEach(function(point) {
+        var pointText = typeof point === 'string' ? point : (point.text || point);
+        var pointAnchor = typeof point === 'object' ? (point.anchor || '') : '';
+
         var li = document.createElement('li');
         li.style.cssText = [
           'display:flex',
           'align-items:flex-start',
           'gap:8px',
-          'color:' + TEXT_POINTS,
           'font-size:13px',
           'line-height:1.5',
         ].join(';');
@@ -229,14 +265,27 @@ export const PAGE_REWRITER_SCRIPT = `
           'border-radius:50%',
           'background:' + BADGE_BG,
           'flex-shrink:0',
-          'margin-top:5px',
+          'margin-top:7px',
         ].join(';');
 
-        var text = document.createElement('span');
-        text.textContent = point;
+        var link = document.createElement('a');
+        link.textContent = pointText;
+        link.href = '#';
+        link.style.cssText = [
+          'color:' + TEXT_POINTS,
+          'text-decoration:none',
+          'cursor:pointer',
+          'transition:color 150ms ease',
+        ].join(';');
+        link.addEventListener('mouseenter', function() { link.style.color = '#c2c1ff'; });
+        link.addEventListener('mouseleave', function() { link.style.color = TEXT_POINTS; });
+        link.addEventListener('click', function(e) {
+          e.preventDefault();
+          scrollToAnchor(pointAnchor || pointText);
+        });
 
         li.appendChild(dot);
-        li.appendChild(text);
+        li.appendChild(link);
         ul.appendChild(li);
       });
 
