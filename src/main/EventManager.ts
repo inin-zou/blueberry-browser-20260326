@@ -595,6 +595,81 @@ export class EventManager {
     ipcMain.handle('workflow:save', async (_event, data: { recording: any; name: string; summary: string }) => {
       return { saved: true, id: data.recording.id };
     });
+
+    // Replay a recorded workflow by executing actions on the active tab
+    ipcMain.handle('workflow:replay', async (_event, actions: any[]) => {
+      const tab = this.mainWindow.activeTab;
+      if (!tab) return { success: false, error: 'No active tab' };
+
+      console.log(`[Workflow] Replaying ${actions.length} actions...`);
+      const results: { step: number; action: string; success: boolean; error?: string }[] = [];
+
+      for (const action of actions) {
+        try {
+          console.log(`[Workflow] Step ${action.step}: ${action.action}`);
+
+          if (action.action === 'navigate' && action.data.url) {
+            await tab.loadURL(action.data.url);
+            // Wait for page to load
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            results.push({ step: action.step, action: action.action, success: true });
+
+          } else if (action.action === 'click' && action.data.selector) {
+            const clickResult = await tab.runJs(`
+              (function() {
+                var el = document.querySelector(${JSON.stringify(action.data.selector)});
+                if (!el) return { success: false, error: 'Element not found: ${action.data.selector}' };
+                el.click();
+                return { success: true };
+              })()
+            `);
+            results.push({ step: action.step, action: action.action, success: clickResult?.success || false, error: clickResult?.error });
+
+          } else if (action.action === 'click' && action.data.position) {
+            // Click by coordinates
+            await tab.runJs(`
+              (function() {
+                var el = document.elementFromPoint(${action.data.position.x}, ${action.data.position.y});
+                if (el) el.click();
+              })()
+            `);
+            results.push({ step: action.step, action: action.action, success: true });
+
+          } else if (action.action === 'type' && action.data.selector) {
+            await tab.runJs(`
+              (function() {
+                var el = document.querySelector(${JSON.stringify(action.data.selector)});
+                if (!el) return;
+                el.focus();
+                el.value = ${JSON.stringify(action.data.value || '')};
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+              })()
+            `);
+            results.push({ step: action.step, action: action.action, success: true });
+
+          } else {
+            results.push({ step: action.step, action: action.action, success: true });
+          }
+
+          // Small delay between actions
+          await new Promise(resolve => setTimeout(resolve, 500));
+
+          // Send progress to sidebar
+          this.mainWindow.sidebar.view.webContents.send('workflow:replay-progress', {
+            step: action.step,
+            total: actions.length,
+            status: 'running',
+          });
+
+        } catch (err: any) {
+          console.error(`[Workflow] Step ${action.step} failed:`, err.message);
+          results.push({ step: action.step, action: action.action, success: false, error: err.message });
+        }
+      }
+
+      console.log(`[Workflow] Replay complete: ${results.filter(r => r.success).length}/${results.length} steps succeeded`);
+      return { success: true, results };
+    });
   }
 
   // Clean up event listeners
