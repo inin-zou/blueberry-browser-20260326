@@ -287,11 +287,12 @@ export class LLMClient {
         maxRetries: 3,
         abortSignal: undefined,
         onStepFinish: ({ toolCalls, toolResults }) => {
+          try {
           if (toolCalls && toolCalls.length > 0) {
             for (const tc of toolCalls) {
-              // inputSchema tools use tc.input, parameters tools use tc.args
               const args = (tc as any).input || (tc as any).args || {};
-              console.log(`[Browser Tool] ${tc.toolName}(${JSON.stringify(args).substring(0, 300)})`);
+              const argsJson = JSON.stringify(args) || '{}';
+              console.log(`[Browser Tool] ${tc.toolName}(${argsJson.substring(0, 300)})`);
               const argsStr = Object.entries(args)
                 .map(([k, v]) => `${k}: ${typeof v === 'string' ? v.substring(0, 60) : v}`)
                 .join(', ');
@@ -300,7 +301,8 @@ export class LLMClient {
           }
           if (toolResults && toolResults.length > 0) {
             for (const tr of toolResults) {
-              console.log(`[Browser Tool Result] ${tr.toolName}: ${JSON.stringify(tr.result).substring(0, 500)}`);
+              const resultJson = JSON.stringify(tr.result) || 'null';
+              console.log(`[Browser Tool Result] ${tr.toolName}: ${resultJson.substring(0, 500)}`);
               const res = tr.result as any;
               if (res?.success === false && res?.error) {
                 toolActions.push(`Error: ${res.error}`);
@@ -341,6 +343,9 @@ export class LLMClient {
                 }
               }
             }
+          }
+          } catch (err: any) {
+            console.error('[Browser Tool] onStepFinish error (non-fatal):', err.message);
           }
         },
       });
