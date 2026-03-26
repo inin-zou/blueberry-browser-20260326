@@ -31,6 +31,12 @@ const topBarAPI = {
   // Sidebar
   toggleSidebar: () =>
     electronAPI.ipcRenderer.invoke("toggle-sidebar"),
+
+  // Annotations
+  toggleAnnotations: () =>
+    electronAPI.ipcRenderer.invoke("annotations:toggle"),
+  getAnnotationsStatus: () =>
+    electronAPI.ipcRenderer.invoke("annotations:status"),
 };
 
 // Use `contextBridge` APIs to expose Electron APIs to

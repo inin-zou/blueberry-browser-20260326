@@ -19,6 +19,7 @@ export class AnnotationManager {
   private dismissCount = 0
   private isThrottled = false
   private throttleTimer: ReturnType<typeof setTimeout> | null = null
+  private _enabled = true
 
   // Progressive disclosure thresholds
   static readonly DISMISS_THROTTLE_COUNT = 3     // after 3 dismissed, throttle
@@ -44,8 +45,17 @@ export class AnnotationManager {
     if (this.throttleTimer) clearTimeout(this.throttleTimer)
   }
 
+  setEnabled(enabled: boolean): void {
+    this._enabled = enabled
+  }
+
+  get enabled(): boolean {
+    return this._enabled
+  }
+
   private handleAttentionSignal = (signal: AttentionSignal): void => {
-    // Don't annotate if throttled
+    // Don't annotate if disabled or throttled
+    if (!this._enabled) return
     if (this.isThrottled) return
 
     // Minimum interval between annotations
