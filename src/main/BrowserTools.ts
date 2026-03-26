@@ -34,11 +34,11 @@ export function createBrowserTools(getWindow: () => Window | null) {
     }),
 
     type_text: tool({
-      description: 'Type text into an input field by CSS selector.',
+      description: 'Type text into an input field. Provide a CSS selector, or a placeholder/label text to search for the field.',
       inputSchema: jsonSchema<{ selector: string; text: string }>({
         type: 'object',
         properties: {
-          selector: { type: 'string', description: 'CSS selector of the input field' },
+          selector: { type: 'string', description: 'CSS selector OR placeholder text of the input field' },
           text: { type: 'string', description: 'Text to type' },
         },
         required: ['selector', 'text'],
@@ -49,13 +49,52 @@ export function createBrowserTools(getWindow: () => Window | null) {
         try {
           return await tab.runJs(`
             (function() {
-              var el = document.querySelector(${JSON.stringify(selector)});
-              if (!el) return { success: false, error: 'Element not found' };
+              var sel = ${JSON.stringify(selector)};
+              var el = document.querySelector(sel);
+
+              // Fallback: search by placeholder text
+              if (!el) {
+                var inputs = document.querySelectorAll('input, textarea');
+                for (var i = 0; i < inputs.length; i++) {
+                  if (inputs[i].placeholder && inputs[i].placeholder.toLowerCase().indexOf(sel.toLowerCase()) !== -1) {
+                    el = inputs[i]; break;
+                  }
+                }
+              }
+
+              // Fallback: search by aria-label
+              if (!el) {
+                var inputs2 = document.querySelectorAll('input, textarea');
+                for (var i = 0; i < inputs2.length; i++) {
+                  var label = inputs2[i].getAttribute('aria-label') || '';
+                  if (label.toLowerCase().indexOf(sel.toLowerCase()) !== -1) {
+                    el = inputs2[i]; break;
+                  }
+                }
+              }
+
+              // Fallback: find the first visible text input
+              if (!el) {
+                var inputs3 = document.querySelectorAll('input[type="text"], input[type="search"], input:not([type]), textarea');
+                for (var i = 0; i < inputs3.length; i++) {
+                  var rect = inputs3[i].getBoundingClientRect();
+                  if (rect.width > 0 && rect.height > 0) {
+                    el = inputs3[i]; break;
+                  }
+                }
+              }
+
+              if (!el) return { success: false, error: 'No input field found on page' };
+
               el.focus();
               el.value = ${JSON.stringify(text)};
               el.dispatchEvent(new Event('input', { bubbles: true }));
               el.dispatchEvent(new Event('change', { bubbles: true }));
-              return { success: true, typed: ${JSON.stringify(text)} };
+
+              // Try pressing Enter to submit search
+              el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true }));
+
+              return { success: true, typed: ${JSON.stringify(text)}, foundVia: el.placeholder || el.name || el.id || 'fallback' };
             })()
           `)
         } catch (err: any) {

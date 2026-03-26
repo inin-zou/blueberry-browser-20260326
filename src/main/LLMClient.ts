@@ -233,8 +233,13 @@ export class LLMClient {
       "",
       "When the user asks you to DO something on the page (click, fill, navigate), use the action tools.",
       "When the user asks you to EXTRACT or ANALYZE data from the page (prices, links, tables, text), use run_in_sandbox.",
-      "Always read_page or get_page_elements first to understand the page before acting.",
-      "After taking an action or extracting data, briefly confirm what you did and show the results.",
+      "",
+      "IMPORTANT workflow for page interactions:",
+      "1. After navigating to a new page, ALWAYS wait then use get_page_elements or read_page to understand the page",
+      "2. Use the actual selectors returned by get_page_elements — do NOT guess selectors",
+      "3. For type_text, you can pass placeholder text as the selector — it will search by placeholder if CSS selector fails",
+      "4. If a tool returns an error, try a different approach (different selector, get_page_elements first)",
+      "5. After completing all actions, briefly summarize what you did and the results",
     ];
 
     if (url) {
@@ -282,7 +287,7 @@ export class LLMClient {
       const result = await streamText({
         model: this.model,
         messages,
-        ...(tools ? { tools, maxSteps: 5 } : {}),
+        ...(tools ? { tools, maxSteps: 10 } : {}),
         temperature: DEFAULT_TEMPERATURE,
         maxRetries: 3,
         abortSignal: undefined,
