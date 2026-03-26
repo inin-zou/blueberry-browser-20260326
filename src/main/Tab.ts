@@ -99,6 +99,17 @@ export class Tab {
     return await this.runJs("document.documentElement.innerText");
   }
 
+  async getDomSnapshot(): Promise<string> {
+    return await this.runJs(`
+      (function() {
+        const clone = document.documentElement.cloneNode(true);
+        // Remove scripts to prevent execution in sandbox
+        clone.querySelectorAll('script').forEach(s => s.remove());
+        return '<!DOCTYPE html>' + clone.outerHTML;
+      })()
+    `);
+  }
+
   loadURL(url: string): Promise<void> {
     this._url = url;
     return this.webContentsView.webContents.loadURL(url);

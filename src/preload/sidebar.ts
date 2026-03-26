@@ -64,6 +64,13 @@ const sidebarAPI = {
   removeSynthesisOfferListener: () => {
     electronAPI.ipcRenderer.removeAllListeners('synthesis:offer');
   },
+
+  // Sandbox execution
+  executeSandbox: (script: string) =>
+    electronAPI.ipcRenderer.invoke('sandbox:execute', { script }),
+
+  applySandbox: (script: string) =>
+    electronAPI.ipcRenderer.send('sandbox:apply', { script }),
 };
 
 // Use `contextBridge` APIs to expose Electron APIs to
