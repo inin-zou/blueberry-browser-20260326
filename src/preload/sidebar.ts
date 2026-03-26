@@ -86,6 +86,7 @@ const sidebarAPI = {
   stopRecording: () => electronAPI.ipcRenderer.invoke('workflow:stop-recording'),
   getRecordingStatus: () => electronAPI.ipcRenderer.invoke('workflow:get-status'),
   saveWorkflow: (data: any) => electronAPI.ipcRenderer.invoke('workflow:save', data),
+  replayWorkflow: (actions: any[]) => electronAPI.ipcRenderer.invoke('workflow:replay', actions),
 
   // History import
   getAvailableBrowsers: () => electronAPI.ipcRenderer.invoke('history:available-browsers'),
