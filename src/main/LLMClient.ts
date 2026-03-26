@@ -289,9 +289,11 @@ export class LLMClient {
         onStepFinish: ({ toolCalls, toolResults }) => {
           if (toolCalls && toolCalls.length > 0) {
             for (const tc of toolCalls) {
-              console.log(`[Browser Tool] ${tc.toolName}(${JSON.stringify(tc.args)})`);
-              const argsStr = Object.entries(tc.args as Record<string, any>)
-                .map(([k, v]) => `${k}: ${v}`)
+              // inputSchema tools use tc.input, parameters tools use tc.args
+              const args = (tc as any).input || (tc as any).args || {};
+              console.log(`[Browser Tool] ${tc.toolName}(${JSON.stringify(args).substring(0, 300)})`);
+              const argsStr = Object.entries(args)
+                .map(([k, v]) => `${k}: ${typeof v === 'string' ? v.substring(0, 60) : v}`)
                 .join(', ');
               toolActions.push(`**${tc.toolName}**(${argsStr})`);
             }
