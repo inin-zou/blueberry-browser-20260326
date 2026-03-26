@@ -156,6 +156,58 @@ export function createBrowserTools(getWindow: () => Window | null) {
       },
     }),
 
+    run_in_sandbox: tool({
+      description: 'Run JavaScript code in an isolated sandbox against a snapshot of the current page DOM. Use this to extract data, scrape content, analyze page structure, or transform page data. The code runs safely against a copy — it cannot affect the live page. Return structured data from your script.',
+      inputSchema: jsonSchema<{ code: string; description: string }>({
+        type: 'object',
+        properties: {
+          code: { type: 'string', description: 'JavaScript code to execute against the page DOM. Must return a value (use return in the function body). Can use document.querySelectorAll, etc.' },
+          description: { type: 'string', description: 'Brief description of what this script does' },
+        },
+        required: ['code', 'description'],
+      }),
+      execute: async ({ code, description }) => {
+        const win = getWindow()
+        const tab = win?.activeTab
+        if (!tab) return { success: false, error: 'No active tab' }
+
+        try {
+          // Get DOM snapshot
+          const domSnapshot = await tab.getDomSnapshot()
+
+          // Import and use SandboxManager
+          const { SandboxManager } = await import('./SandboxManager')
+          const { AIEventLog } = await import('./AIEventLog')
+          const sandbox = new SandboxManager(win.aiEventLog)
+
+          const result = await sandbox.execute({
+            id: `sandbox-${Date.now()}`,
+            domSnapshot,
+            script: code,
+            sourceTabId: tab.id,
+            timeout: 10000,
+          })
+
+          if (result.status === 'success') {
+            return {
+              success: true,
+              description,
+              output: result.output,
+              executionTimeMs: result.executionTimeMs,
+            }
+          } else {
+            return {
+              success: false,
+              error: result.error || result.status,
+              description,
+            }
+          }
+        } catch (err: any) {
+          return { success: false, error: err.message, description }
+        }
+      },
+    }),
+
     get_page_elements: tool({
       description: 'List interactive elements (buttons, links, inputs) on the page.',
       inputSchema: jsonSchema<{ element_type: string }>({
