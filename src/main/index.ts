@@ -9,6 +9,9 @@ import { AIEventLog } from "./AIEventLog";
 import { InjectionRegistry } from "./InjectionRegistry";
 import { ModelRouter } from "./ModelRouter";
 import { LocalModelManager } from "./LocalModelManager";
+import { SqliteBackend } from "./SqliteBackend";
+import { join } from "path";
+import { app as electronApp2 } from "electron";
 
 let mainWindow: Window | null = null;
 let eventManager: EventManager | null = null;
@@ -19,6 +22,7 @@ let aiEventLog: AIEventLog | null = null;
 let injectionRegistry: InjectionRegistry | null = null;
 let modelRouter: ModelRouter | null = null;
 let localModel: LocalModelManager | null = null;
+let storage: SqliteBackend | null = null;
 
 const createWindow = (): Window => {
   eventBus = new EventBus();
@@ -29,7 +33,11 @@ const createWindow = (): Window => {
     localInfer: null,
     cloudInfer: async (_req) => ({ result: "", confidence: 0.9 }),
   });
-  const window = new Window({ eventBus, ringBuffer, aiEventLog, injectionRegistry });
+  // Initialize SQLite storage
+  const dbPath = join(electronApp2.getPath('userData'), 'blueberry.db');
+  storage = new SqliteBackend(dbPath);
+
+  const window = new Window({ eventBus, ringBuffer, aiEventLog, injectionRegistry, storage });
   menu = new AppMenu(window);
   eventManager = new EventManager(window);
 
@@ -88,6 +96,7 @@ app.on("window-all-closed", () => {
   if (injectionRegistry) { injectionRegistry = null; }
   if (modelRouter) { modelRouter = null; }
   if (localModel) { localModel.destroy(); localModel = null; }
+  if (storage) { storage.close(); storage = null; }
 
   if (process.platform !== "darwin") {
     app.quit();
