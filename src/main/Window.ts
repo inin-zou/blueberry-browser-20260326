@@ -9,6 +9,7 @@ import { InjectionRegistry } from "./InjectionRegistry";
 import { buildGhostTextScript } from "./scripts/ghost-text-script";
 import { SELECTION_PILL_SCRIPT } from "./scripts/selection-pill-script";
 import { PAGE_ANNOTATIONS_SCRIPT } from "./scripts/page-annotations-script";
+import { PAGE_REWRITER_SCRIPT } from "./scripts/page-rewriter-script";
 
 interface WindowServices {
   eventBus: EventBus;
@@ -38,6 +39,7 @@ export class Window {
     // Register shared injected scripts
     this.injectionRegistry.register('selection-pill', SELECTION_PILL_SCRIPT);
     this.injectionRegistry.register('page-annotations', PAGE_ANNOTATIONS_SCRIPT);
+    this.injectionRegistry.register('page-rewriter', PAGE_REWRITER_SCRIPT);
 
     // Create the browser window.
     this._baseWindow = new BaseWindow({
