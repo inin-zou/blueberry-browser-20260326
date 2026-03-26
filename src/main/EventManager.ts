@@ -470,13 +470,23 @@ export class EventManager {
   private handlePageRewriteEvents(): void {
     // Triggered by a button in the sidebar or topbar to analyze and rewrite the current page
     ipcMain.handle('page:rewrite', async () => {
+      console.log('[Page Rewrite] Triggered');
       const tab = this.mainWindow.activeTab;
-      if (!tab) return null;
-      const result = await this.pageRewriter.rewrite(tab);
-      if (result) {
-        tab.webContents.send('page:rewrite', result);
+      if (!tab) { console.log('[Page Rewrite] No active tab'); return null; }
+      console.log('[Page Rewrite] Analyzing page:', tab.url);
+      try {
+        const result = await this.pageRewriter.rewrite(tab);
+        if (result) {
+          console.log('[Page Rewrite] Success:', result.pageType, result.tldr?.substring(0, 50));
+          tab.webContents.send('page:rewrite', result);
+        } else {
+          console.log('[Page Rewrite] No result (page type not supported)');
+        }
+        return result;
+      } catch (err: any) {
+        console.error('[Page Rewrite] Error:', err.message);
+        return null;
       }
-      return result;
     });
 
     // Restore the original page view (remove the AI overlay panel)
@@ -538,18 +548,22 @@ export class EventManager {
 
   private handleWorkflowEvents(): void {
     ipcMain.handle('workflow:start-recording', () => {
+      console.log('[Workflow] Start recording requested');
       const tab = this.mainWindow.activeTab;
       if (tab) {
         this.workflowRecorder.startRecording(tab.id);
+        console.log('[Workflow] Recording started for tab:', tab.id);
         return { recording: true };
       }
+      console.log('[Workflow] No active tab');
       return { recording: false };
     });
 
     ipcMain.handle('workflow:stop-recording', async () => {
+      console.log('[Workflow] Stop recording requested');
       const recording = this.workflowRecorder.stopRecording();
-      if (!recording) return null;
-
+      if (!recording) { console.log('[Workflow] No recording to stop'); return null; }
+      console.log('[Workflow] Recording stopped:', recording.actions.length, 'actions captured');
       const summaryPrompt = this.workflowRecorder.generateSummaryPrompt(recording);
       return { recording, summaryPrompt };
     });
