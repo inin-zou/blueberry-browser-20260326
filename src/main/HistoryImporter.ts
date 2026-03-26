@@ -1,5 +1,5 @@
-import Database from 'better-sqlite3'
-import { existsSync, copyFileSync, mkdtempSync } from 'fs'
+import initSqlJs from 'sql.js'
+import { existsSync, copyFileSync, mkdtempSync, readFileSync } from 'fs'
 import { join } from 'path'
 import { tmpdir, homedir } from 'os'
 
@@ -68,11 +68,17 @@ export class HistoryImporter {
 
     try {
       copyFileSync(config.historyPath, tempDb)
-      const db = new Database(tempDb, { readonly: true })
+      const SQL = await initSqlJs()
+      const buffer = readFileSync(tempDb)
+      const db = new SQL.Database(buffer)
 
-      let rows: any[]
+      let rows: any[] = []
       try {
-        rows = db.prepare(config.query).all()
+        const stmt = db.prepare(config.query)
+        while (stmt.step()) {
+          rows.push(stmt.getAsObject())
+        }
+        stmt.free()
       } catch {
         // Safari/Firefox may have different schemas
         rows = []
@@ -80,12 +86,12 @@ export class HistoryImporter {
         db.close()
       }
 
-      return rows.map((row) => ({
+      return rows.map((row: any) => ({
         url: row.url || '',
         title: row.title || '',
         visitCount: row.visit_count || 1,
         lastVisited: config.timestampConverter(row.last_visit_time || row.last_visit_date || 0),
-      })).filter((e) => e.url.startsWith('http'))
+      })).filter((e: any) => e.url.startsWith('http'))
     } catch (err) {
       console.error(`Failed to import ${config.name} history:`, err)
       return []
