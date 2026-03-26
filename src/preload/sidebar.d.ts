@@ -71,6 +71,14 @@ interface SidebarAPI {
   stopRecording: () => Promise<{ recording: any; summaryPrompt: string } | null>;
   getRecordingStatus: () => Promise<{ isRecording: boolean; actionCount: number }>;
   saveWorkflow: (data: { recording: any; name: string; summary: string }) => Promise<{ saved: boolean; id: string }>;
+
+  // History import
+  getAvailableBrowsers: () => Promise<{ id: string; name: string; available: boolean }[]>;
+  importHistory: (browserIds: string[]) => Promise<{ urlCount: number }>;
+
+  // Page rewrite
+  rewritePage: () => Promise<any>;
+  restorePage: () => void;
 }
 
 declare global {
