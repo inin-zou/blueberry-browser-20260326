@@ -79,6 +79,18 @@ export class EventManager {
     // Annotation signal events (dismiss forwarding)
     this.handleAnnotationSignalEvents();
 
+    // Annotation toggle (enable/disable from topbar)
+    ipcMain.handle('annotations:toggle', () => {
+      const newState = !this.annotationManager.enabled;
+      this.annotationManager.setEnabled(newState);
+      console.log(`[Annotations] ${newState ? 'Enabled' : 'Disabled'}`);
+      return { enabled: newState };
+    });
+
+    ipcMain.handle('annotations:status', () => {
+      return { enabled: this.annotationManager.enabled };
+    });
+
     // Browser history import events
     this.handleHistoryEvents();
 

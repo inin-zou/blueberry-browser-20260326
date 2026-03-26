@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { ArrowLeft, ArrowRight, RefreshCw, Loader2, PanelLeftClose, PanelLeft } from 'lucide-react'
+import { ArrowLeft, ArrowRight, RefreshCw, Loader2, PanelLeftClose, PanelLeft, Eye, EyeOff } from 'lucide-react'
 import { useBrowser } from '../contexts/BrowserContext'
 import { ToolBarButton } from '../components/ToolBarButton'
 import { Favicon } from '../components/Favicon'
@@ -102,11 +102,19 @@ export const AddressBar: React.FC = () => {
         }
     }
 
+    const [annotationsEnabled, setAnnotationsEnabled] = useState(true)
+
     const toggleSidebar = () => {
         setIsSidebarOpen(!isSidebarOpen)
-        // Send IPC event to toggle sidebar
         if (window.topBarAPI) {
             window.topBarAPI.toggleSidebar()
+        }
+    }
+
+    const toggleAnnotations = async () => {
+        if (window.topBarAPI) {
+            const result = await window.topBarAPI.toggleAnnotations()
+            setAnnotationsEnabled(result.enabled)
         }
     }
 
@@ -197,6 +205,11 @@ export const AddressBar: React.FC = () => {
             {/* Actions Menu */}
             <div className="flex items-center gap-1 app-region-no-drag">
                 <DarkModeToggle />
+                <ToolBarButton
+                    Icon={annotationsEnabled ? Eye : EyeOff}
+                    onClick={toggleAnnotations}
+                    toggled={annotationsEnabled}
+                />
                 <ToolBarButton
                     Icon={isSidebarOpen ? PanelLeftClose : PanelLeft}
                     onClick={toggleSidebar}
