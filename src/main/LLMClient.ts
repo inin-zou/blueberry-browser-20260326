@@ -271,23 +271,9 @@ export class LLMClient {
     }
 
     try {
-      // Browser tools for agent mode
-      // Note: tools use zod schemas which need proper JSON Schema serialization
-      let tools: any = undefined;
-      let maxSteps: number | undefined = undefined;
-      try {
-        if (this.window) {
-          tools = createBrowserTools(() => this.window);
-          maxSteps = 5;
-        }
-      } catch {
-        // If tool creation fails, proceed without tools
-      }
-
       const result = await streamText({
         model: this.model,
         messages,
-        ...(tools ? { tools, maxSteps } : {}),
         temperature: DEFAULT_TEMPERATURE,
         maxRetries: 3,
         abortSignal: undefined,
