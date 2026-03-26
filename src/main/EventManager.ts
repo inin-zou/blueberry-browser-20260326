@@ -6,6 +6,7 @@ import { HistoryImporter } from "./HistoryImporter";
 import { ProfileBuilder } from "./ProfileBuilder";
 import { TabSynthesizer } from "./TabSynthesizer";
 import { PageRewriter } from "./PageRewriter";
+import { SandboxManager } from "./SandboxManager";
 import type { RawHistoryEntry } from "./HistoryImporter";
 
 export class EventManager {
@@ -16,6 +17,7 @@ export class EventManager {
   private profileBuilder: ProfileBuilder;
   private tabSynthesizer: TabSynthesizer;
   private pageRewriter: PageRewriter;
+  private sandboxManager: SandboxManager;
 
   constructor(mainWindow: Window) {
     this.mainWindow = mainWindow;
@@ -35,6 +37,7 @@ export class EventManager {
     );
     this.tabSynthesizer.start();
     this.pageRewriter = new PageRewriter(this.mainWindow.aiEventLog);
+    this.sandboxManager = new SandboxManager(this.mainWindow.aiEventLog);
     this.setupEventHandlers();
   }
 
@@ -74,6 +77,9 @@ export class EventManager {
 
     // Page rewrite events
     this.handlePageRewriteEvents();
+
+    // Sandbox execution events
+    this.handleSandboxEvents();
   }
 
   private handleRrwebEvents(): void {
@@ -410,6 +416,54 @@ export class EventManager {
       const tab = this.mainWindow.activeTab;
       if (tab) {
         tab.webContents.send('page:restore', {});
+      }
+    });
+  }
+
+  private handleSandboxEvents(): void {
+    // Execute a script in an isolated sandbox against the current page's DOM snapshot
+    ipcMain.handle('sandbox:execute', async (_event, data: { script: string }) => {
+      const tab = this.mainWindow.activeTab;
+      if (!tab) {
+        return {
+          id: 'err',
+          status: 'error',
+          error: 'No active tab',
+          output: null,
+          consoleOutput: [],
+          executionTimeMs: 0,
+          script: data.script,
+        };
+      }
+
+      let domSnapshot: string;
+      try {
+        domSnapshot = await tab.getDomSnapshot();
+      } catch {
+        return {
+          id: 'err',
+          status: 'error',
+          error: 'Failed to capture DOM',
+          output: null,
+          consoleOutput: [],
+          executionTimeMs: 0,
+          script: data.script,
+        };
+      }
+
+      return await this.sandboxManager.execute({
+        id: `sandbox-${Date.now()}`,
+        domSnapshot,
+        script: data.script,
+        sourceTabId: tab.id,
+      });
+    });
+
+    // Apply sandbox script result to the live page
+    ipcMain.on('sandbox:apply', (_event, data: { script: string }) => {
+      const tab = this.mainWindow.activeTab;
+      if (tab) {
+        tab.runJs(data.script);
       }
     });
   }

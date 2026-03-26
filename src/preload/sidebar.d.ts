@@ -23,6 +23,16 @@ interface TabInfo {
   isActive: boolean;
 }
 
+interface SandboxResult {
+  id: string;
+  status: 'success' | 'error' | 'timeout';
+  output: any;
+  consoleOutput: string[];
+  error?: string;
+  executionTimeMs: number;
+  script: string;
+}
+
 interface SidebarAPI {
   // Chat functionality
   sendChatMessage: (request: ChatRequest) => Promise<void>;
@@ -41,6 +51,10 @@ interface SidebarAPI {
   requestSynthesis: (tabIds?: string[]) => Promise<import('../main/TabSynthesizer').SynthesisResult | null>;
   onSynthesisOffer: (callback: (data: { tabCount: number; timestamp: number }) => void) => void;
   removeSynthesisOfferListener: () => void;
+
+  // Sandbox execution
+  executeSandbox: (script: string) => Promise<SandboxResult>;
+  applySandbox: (script: string) => void;
 }
 
 declare global {
