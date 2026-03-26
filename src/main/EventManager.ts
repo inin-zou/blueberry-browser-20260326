@@ -5,6 +5,7 @@ import { AnnotationManager } from "./AnnotationManager";
 import { HistoryImporter } from "./HistoryImporter";
 import { ProfileBuilder } from "./ProfileBuilder";
 import { TabSynthesizer } from "./TabSynthesizer";
+import { PageRewriter } from "./PageRewriter";
 import type { RawHistoryEntry } from "./HistoryImporter";
 
 export class EventManager {
@@ -14,6 +15,7 @@ export class EventManager {
   private historyImporter: HistoryImporter;
   private profileBuilder: ProfileBuilder;
   private tabSynthesizer: TabSynthesizer;
+  private pageRewriter: PageRewriter;
 
   constructor(mainWindow: Window) {
     this.mainWindow = mainWindow;
@@ -32,6 +34,7 @@ export class EventManager {
       () => this.mainWindow.allTabs,
     );
     this.tabSynthesizer.start();
+    this.pageRewriter = new PageRewriter(this.mainWindow.aiEventLog);
     this.setupEventHandlers();
   }
 
@@ -68,6 +71,9 @@ export class EventManager {
 
     // Cross-tab synthesis events
     this.handleSynthesisEvents();
+
+    // Page rewrite events
+    this.handlePageRewriteEvents();
   }
 
   private handleRrwebEvents(): void {
@@ -384,6 +390,27 @@ export class EventManager {
     // Forward synthesis offer to sidebar
     this.mainWindow.eventBus.on('synthesis:offer', (data) => {
       this.mainWindow.sidebar.view.webContents.send('synthesis:offer', data);
+    });
+  }
+
+  private handlePageRewriteEvents(): void {
+    // Triggered by a button in the sidebar or topbar to analyze and rewrite the current page
+    ipcMain.handle('page:rewrite', async () => {
+      const tab = this.mainWindow.activeTab;
+      if (!tab) return null;
+      const result = await this.pageRewriter.rewrite(tab);
+      if (result) {
+        tab.webContents.send('page:rewrite', result);
+      }
+      return result;
+    });
+
+    // Restore the original page view (remove the AI overlay panel)
+    ipcMain.on('page:restore', () => {
+      const tab = this.mainWindow.activeTab;
+      if (tab) {
+        tab.webContents.send('page:restore', {});
+      }
     });
   }
 
