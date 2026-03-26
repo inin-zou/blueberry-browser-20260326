@@ -47,6 +47,16 @@ interface SidebarAPI {
   // Tab information
   getActiveTabInfo: () => Promise<TabInfo | null>;
 
+  // Chat management
+  clearChat: () => Promise<void>;
+  getMessages: () => Promise<any[]>;
+  onMessagesUpdated: (callback: (messages: any[]) => void) => void;
+  removeMessagesUpdatedListener: () => void;
+
+  // Selection pill context
+  onSelectionContext: (callback: (data: { text: string; url: string; context: string; mode: string }) => void) => void;
+  removeSelectionContextListener: () => void;
+
   // Cross-tab synthesis
   requestSynthesis: (tabIds?: string[]) => Promise<import('../main/TabSynthesizer').SynthesisResult | null>;
   onSynthesisOffer: (callback: (data: { tabCount: number; timestamp: number }) => void) => void;
