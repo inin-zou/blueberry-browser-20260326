@@ -23,7 +23,7 @@ type LLMProvider = "openai" | "anthropic";
 
 const DEFAULT_MODELS: Record<LLMProvider, string> = {
   openai: "gpt-4o",
-  anthropic: "claude-sonnet-4-6-20250514",
+  anthropic: "claude-sonnet-4-6",
 };
 
 const MAX_CONTEXT_LENGTH = 4000;
