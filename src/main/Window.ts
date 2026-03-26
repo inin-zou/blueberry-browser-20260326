@@ -2,6 +2,17 @@ import { BaseWindow, shell } from "electron";
 import { Tab } from "./Tab";
 import { TopBar } from "./TopBar";
 import { SideBar } from "./SideBar";
+import { EventBus } from "./EventBus";
+import { RrwebRingBuffer } from "./RrwebRingBuffer";
+import { AIEventLog } from "./AIEventLog";
+import { InjectionRegistry } from "./InjectionRegistry";
+
+interface WindowServices {
+  eventBus: EventBus;
+  ringBuffer: RrwebRingBuffer;
+  aiEventLog: AIEventLog;
+  injectionRegistry: InjectionRegistry;
+}
 
 export class Window {
   private _baseWindow: BaseWindow;
@@ -10,8 +21,16 @@ export class Window {
   private tabCounter: number = 0;
   private _topBar: TopBar;
   private _sideBar: SideBar;
+  readonly eventBus: EventBus;
+  readonly ringBuffer: RrwebRingBuffer;
+  readonly aiEventLog: AIEventLog;
+  readonly injectionRegistry: InjectionRegistry;
 
-  constructor() {
+  constructor(services: WindowServices) {
+    this.eventBus = services.eventBus;
+    this.ringBuffer = services.ringBuffer;
+    this.aiEventLog = services.aiEventLog;
+    this.injectionRegistry = services.injectionRegistry;
     // Create the browser window.
     this._baseWindow = new BaseWindow({
       width: 1000,

@@ -24,6 +24,16 @@ export class EventManager {
 
     // Debug events
     this.handleDebugEvents();
+
+    // rrweb events from tab preload bridge
+    this.handleRrwebEvents();
+  }
+
+  private handleRrwebEvents(): void {
+    ipcMain.on('rrweb:event', (_event, data) => {
+      this.mainWindow.eventBus.emit('rrweb:event', data);
+      this.mainWindow.ringBuffer.push(data);
+    });
   }
 
   private handleTabEvents(): void {

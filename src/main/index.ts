@@ -3,13 +3,31 @@ import { electronApp } from "@electron-toolkit/utils";
 import { Window } from "./Window";
 import { AppMenu } from "./Menu";
 import { EventManager } from "./EventManager";
+import { EventBus } from "./EventBus";
+import { RrwebRingBuffer } from "./RrwebRingBuffer";
+import { AIEventLog } from "./AIEventLog";
+import { InjectionRegistry } from "./InjectionRegistry";
+import { ModelRouter } from "./ModelRouter";
 
 let mainWindow: Window | null = null;
 let eventManager: EventManager | null = null;
 let menu: AppMenu | null = null;
+let eventBus: EventBus | null = null;
+let ringBuffer: RrwebRingBuffer | null = null;
+let aiEventLog: AIEventLog | null = null;
+let injectionRegistry: InjectionRegistry | null = null;
+let modelRouter: ModelRouter | null = null;
 
 const createWindow = (): Window => {
-  const window = new Window();
+  eventBus = new EventBus();
+  ringBuffer = new RrwebRingBuffer();
+  aiEventLog = new AIEventLog();
+  injectionRegistry = new InjectionRegistry();
+  modelRouter = new ModelRouter({
+    localInfer: null,
+    cloudInfer: async (_req) => ({ result: "", confidence: 0.9 }),
+  });
+  const window = new Window({ eventBus, ringBuffer, aiEventLog, injectionRegistry });
   menu = new AppMenu(window);
   eventManager = new EventManager(window);
   return window;
@@ -42,6 +60,12 @@ app.on("window-all-closed", () => {
   if (menu) {
     menu = null;
   }
+
+  if (eventBus) { eventBus.cleanup(); eventBus = null; }
+  if (ringBuffer) { ringBuffer = null; }
+  if (aiEventLog) { aiEventLog = null; }
+  if (injectionRegistry) { injectionRegistry = null; }
+  if (modelRouter) { modelRouter = null; }
 
   if (process.platform !== "darwin") {
     app.quit();
