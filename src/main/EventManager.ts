@@ -2,6 +2,7 @@ import { ipcMain, WebContents } from "electron";
 import type { Window } from "./Window";
 import { CompletionEngine } from "./CompletionEngine";
 import { AnnotationManager } from "./AnnotationManager";
+import { AttentionEngine } from "./AttentionEngine";
 import { HistoryImporter } from "./HistoryImporter";
 import { ProfileBuilder } from "./ProfileBuilder";
 import { TabSynthesizer } from "./TabSynthesizer";
@@ -14,6 +15,7 @@ export class EventManager {
   private mainWindow: Window;
   private completionEngine: CompletionEngine;
   private annotationManager: AnnotationManager;
+  private attentionEngine: AttentionEngine;
   private historyImporter: HistoryImporter;
   private profileBuilder: ProfileBuilder;
   private tabSynthesizer: TabSynthesizer;
@@ -32,6 +34,8 @@ export class EventManager {
     this.historyImporter = new HistoryImporter();
     this.profileBuilder = new ProfileBuilder();
     this.annotationManager.start();
+    this.attentionEngine = new AttentionEngine(this.mainWindow.eventBus);
+    this.attentionEngine.start();
     this.tabSynthesizer = new TabSynthesizer(
       this.mainWindow.eventBus,
       this.mainWindow.aiEventLog,
@@ -558,6 +562,7 @@ export class EventManager {
   // Clean up event listeners
   public cleanup(): void {
     this.annotationManager.stop();
+    this.attentionEngine.stop();
     this.tabSynthesizer.stop();
     ipcMain.removeAllListeners();
   }
