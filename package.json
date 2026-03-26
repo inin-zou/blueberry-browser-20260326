@@ -8,6 +8,8 @@
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
@@ -27,17 +29,21 @@
     "@electron-toolkit/utils": "^4.0.0",
     "@radix-ui/react-slot": "^1.2.3",
     "ai": "^5.0.44",
+    "better-sqlite3": "^12.8.0",
     "class-variance-authority": "^0.7.1",
     "dotenv": "^17.2.2",
     "lucide-react": "^0.544.0",
     "react-markdown": "^10.1.0",
     "remark-breaks": "^4.0.0",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "rrweb": "2.0.0-alpha.4",
+    "zustand": "^5.0.12"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",
     "@electron-toolkit/eslint-config-ts": "^3.0.0",
     "@electron-toolkit/tsconfig": "^1.0.1",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.16.5",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
@@ -58,7 +64,8 @@
     "tailwind-merge": "^3.3.1",
     "tailwindcss": "^3.4.0",
     "typescript": "^5.8.3",
-    "vite": "^7.0.5"
+    "vite": "^7.0.5",
+    "vitest": "^4.1.1"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
