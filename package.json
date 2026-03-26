@@ -27,6 +27,7 @@
     "@ai-sdk/openai": "^2.0.30",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
+    "@huggingface/transformers": "^3.8.1",
     "@radix-ui/react-slot": "^1.2.3",
     "ai": "^5.0.44",
     "better-sqlite3": "^12.8.0",
