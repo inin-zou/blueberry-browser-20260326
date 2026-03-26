@@ -22,8 +22,8 @@ interface StreamChunk {
 type LLMProvider = "openai" | "anthropic";
 
 const DEFAULT_MODELS: Record<LLMProvider, string> = {
-  openai: "gpt-4o-mini",
-  anthropic: "claude-3-5-sonnet-20241022",
+  openai: "gpt-4o",
+  anthropic: "claude-sonnet-4-6-20250514",
 };
 
 const MAX_CONTEXT_LENGTH = 4000;
@@ -36,6 +36,7 @@ export class LLMClient {
   private readonly modelName: string;
   private readonly model: LanguageModel | null;
   private messages: CoreMessage[] = [];
+  private userInterests: string[] = [];
 
   constructor(webContents: WebContents) {
     this.webContents = webContents;
@@ -49,6 +50,11 @@ export class LLMClient {
   // Set the window reference after construction to avoid circular dependencies
   setWindow(window: Window): void {
     this.window = window;
+  }
+
+  // Set inferred user interests from imported browser history
+  setUserProfile(interests: string[]): void {
+    this.userInterests = interests;
   }
 
   private getProvider(): LLMProvider {
@@ -215,6 +221,11 @@ export class LLMClient {
     if (pageText) {
       const truncatedText = this.truncateText(pageText, MAX_CONTEXT_LENGTH);
       parts.push(`\nPage content (text):\n${truncatedText}`);
+    }
+
+    if (this.userInterests.length > 0) {
+      parts.push(`\nUser interests: ${this.userInterests.join(', ')}`);
+      parts.push("Tailor your responses to the user's areas of interest when relevant.");
     }
 
     parts.push(
