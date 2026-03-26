@@ -5,6 +5,7 @@ import { anthropic } from "@ai-sdk/anthropic";
 import * as dotenv from "dotenv";
 import { join } from "path";
 import type { Window } from "./Window";
+import { createBrowserTools } from "./BrowserTools";
 
 // Load environment variables from .env file
 dotenv.config({ path: join(__dirname, "../../.env") });
@@ -214,6 +215,19 @@ export class LLMClient {
       "Be concise, precise, and professional. Avoid emojis and unnecessary filler.",
       "Use markdown formatting for structured responses. Prefer bullet points over paragraphs when listing information.",
       "The user's messages may include screenshots of the current page as the first image.",
+      "",
+      "You have browser action tools available. You can:",
+      "- click: Click elements by CSS selector",
+      "- type_text: Type into input fields",
+      "- navigate: Go to a URL",
+      "- scroll: Scroll up or down",
+      "- read_page: Read the current page content",
+      "- run_javascript: Execute custom JS on the page",
+      "- get_page_elements: List buttons, links, and inputs on the page",
+      "",
+      "When the user asks you to do something on the page, use these tools.",
+      "Always read_page or get_page_elements first to understand the page before clicking or typing.",
+      "After taking an action, briefly confirm what you did.",
     ];
 
     if (url) {
@@ -252,17 +266,34 @@ export class LLMClient {
     }
 
     try {
+      const tools = this.window ? createBrowserTools(() => this.window) : undefined;
+
       const result = await streamText({
         model: this.model,
         messages,
+        tools,
+        maxSteps: 5, // Allow up to 5 tool calls per response
         temperature: DEFAULT_TEMPERATURE,
         maxRetries: 3,
-        abortSignal: undefined, // Could add abort controller for cancellation
+        abortSignal: undefined,
+        onStepFinish: ({ toolCalls, toolResults }) => {
+          // Log tool usage to console for debugging
+          if (toolCalls && toolCalls.length > 0) {
+            for (const tc of toolCalls) {
+              console.log(`[Browser Tool] ${tc.toolName}(${JSON.stringify(tc.args)})`);
+            }
+          }
+          if (toolResults && toolResults.length > 0) {
+            for (const tr of toolResults) {
+              console.log(`[Browser Tool Result] ${tr.toolName}: ${JSON.stringify(tr.result).substring(0, 200)}`);
+            }
+          }
+        },
       });
 
       await this.processStream(result.textStream, messageId);
     } catch (error) {
-      throw error; // Re-throw to be handled by the caller
+      throw error;
     }
   }
 
