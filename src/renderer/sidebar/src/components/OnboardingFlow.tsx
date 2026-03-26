@@ -145,7 +145,7 @@ export function OnboardingFlow({ onComplete, onSkip }: OnboardingFlowProps) {
           <div className="space-y-2">
             <p className="text-xs text-center text-[#c7c4d7] font-mono">{progress}</p>
             <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-[#5E5CE6] to-[#C2C1FF] rounded-full animate-pulse" style={{ width: '60%' }}></div>
+              <div className="h-full bg-gradient-to-r from-[#5E5CE6] to-[#C2C1FF] rounded-full transition-all duration-1000" style={{ width: importing ? '90%' : '0%' }}></div>
             </div>
           </div>
         )}
