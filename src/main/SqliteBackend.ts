@@ -1,4 +1,5 @@
-import Database from 'better-sqlite3'
+import initSqlJs, { type Database } from 'sql.js'
+import { readFileSync, writeFileSync, existsSync } from 'fs'
 import type {
   StorageBackend,
   WorkflowRecord,
@@ -8,16 +9,40 @@ import type {
 } from './StorageBackend'
 
 export class SqliteBackend implements StorageBackend {
-  private db: Database.Database
+  private db: Database | null = null
+  private dbPath: string
+  private ready: Promise<void>
 
   constructor(dbPath: string) {
-    this.db = new Database(dbPath)
-    this.db.pragma('journal_mode = WAL')
+    this.dbPath = dbPath
+    this.ready = this.init()
+  }
+
+  private async init(): Promise<void> {
+    const SQL = await initSqlJs()
+    if (existsSync(this.dbPath)) {
+      const buffer = readFileSync(this.dbPath)
+      this.db = new SQL.Database(buffer)
+    } else {
+      this.db = new SQL.Database()
+    }
     this.createTables()
   }
 
+  private ensureDb(): Database {
+    if (!this.db) throw new Error('Database not initialized')
+    return this.db
+  }
+
+  private save(): void {
+    if (!this.db) return
+    const data = this.db.export()
+    writeFileSync(this.dbPath, Buffer.from(data))
+  }
+
   private createTables(): void {
-    this.db.exec(`
+    const db = this.ensureDb()
+    db.run(`
       CREATE TABLE IF NOT EXISTS workflows (
         id TEXT PRIMARY KEY,
         name TEXT,
@@ -28,8 +53,9 @@ export class SqliteBackend implements StorageBackend {
         summary TEXT,
         tags TEXT,
         synced_at INTEGER
-      );
-
+      )
+    `)
+    db.run(`
       CREATE TABLE IF NOT EXISTS url_completions (
         url TEXT PRIMARY KEY,
         title TEXT,
@@ -37,17 +63,18 @@ export class SqliteBackend implements StorageBackend {
         last_visited INTEGER,
         domain TEXT,
         topic_cluster TEXT
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_url_domain ON url_completions(domain);
-      CREATE INDEX IF NOT EXISTS idx_url_last_visited ON url_completions(last_visited DESC);
-
+      )
+    `)
+    db.run(`CREATE INDEX IF NOT EXISTS idx_url_domain ON url_completions(domain)`)
+    db.run(`CREATE INDEX IF NOT EXISTS idx_url_last_visited ON url_completions(last_visited DESC)`)
+    db.run(`
       CREATE TABLE IF NOT EXISTS user_profile (
         key TEXT PRIMARY KEY,
         value_json TEXT,
         updated_at INTEGER
-      );
-
+      )
+    `)
+    db.run(`
       CREATE TABLE IF NOT EXISTS saved_scripts (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -58,31 +85,45 @@ export class SqliteBackend implements StorageBackend {
         last_used_at INTEGER,
         use_count INTEGER DEFAULT 0,
         synced_at INTEGER
-      );
+      )
     `)
+    this.save()
+  }
+
+  private queryAll(sql: string, params: any[] = []): any[] {
+    const db = this.ensureDb()
+    const stmt = db.prepare(sql)
+    if (params.length) stmt.bind(params)
+    const results: any[] = []
+    while (stmt.step()) {
+      results.push(stmt.getAsObject())
+    }
+    stmt.free()
+    return results
+  }
+
+  private queryOne(sql: string, params: any[] = []): any | null {
+    const results = this.queryAll(sql, params)
+    return results.length > 0 ? results[0] : null
+  }
+
+  private runSql(sql: string, params: any[] = []): void {
+    const db = this.ensureDb()
+    db.run(sql, params)
   }
 
   async saveWorkflow(wf: WorkflowRecord): Promise<void> {
-    this.db
-      .prepare(
-        `INSERT OR REPLACE INTO workflows (id, name, created_at, duration_ms, actions_json, rrweb_events_blob, summary, tags)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-      )
-      .run(
-        wf.id,
-        wf.name ?? null,
-        wf.createdAt,
-        wf.durationMs,
-        wf.actionsJson,
-        wf.rrwebEventsBlob ?? null,
-        wf.summary ?? null,
-        wf.tags ?? null
-      )
+    await this.ready
+    this.runSql(
+      `INSERT OR REPLACE INTO workflows (id, name, created_at, duration_ms, actions_json, rrweb_events_blob, summary, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [wf.id, wf.name ?? null, wf.createdAt, wf.durationMs, wf.actionsJson, wf.rrwebEventsBlob ?? null, wf.summary ?? null, wf.tags ?? null]
+    )
+    this.save()
   }
 
   async getWorkflows(): Promise<WorkflowRecord[]> {
-    const rows = this.db.prepare('SELECT * FROM workflows ORDER BY created_at DESC').all() as any[]
-    return rows.map((r) => ({
+    await this.ready
+    return this.queryAll('SELECT * FROM workflows ORDER BY created_at DESC').map((r) => ({
       id: r.id,
       name: r.name,
       createdAt: r.created_at,
@@ -95,34 +136,26 @@ export class SqliteBackend implements StorageBackend {
   }
 
   async deleteWorkflow(id: string): Promise<void> {
-    this.db.prepare('DELETE FROM workflows WHERE id = ?').run(id)
+    await this.ready
+    this.runSql('DELETE FROM workflows WHERE id = ?', [id])
+    this.save()
   }
 
   async saveScript(s: SavedScript): Promise<void> {
-    this.db
-      .prepare(
-        `INSERT OR REPLACE INTO saved_scripts (id, name, prompt, script, source_url_pattern, created_at, last_used_at, use_count)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-      )
-      .run(
-        s.id,
-        s.name,
-        s.prompt,
-        s.script,
-        s.sourceUrlPattern ?? null,
-        s.createdAt,
-        s.lastUsedAt ?? null,
-        s.useCount
-      )
+    await this.ready
+    this.runSql(
+      `INSERT OR REPLACE INTO saved_scripts (id, name, prompt, script, source_url_pattern, created_at, last_used_at, use_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [s.id, s.name, s.prompt, s.script, s.sourceUrlPattern ?? null, s.createdAt, s.lastUsedAt ?? null, s.useCount]
+    )
+    this.save()
   }
 
   async getScriptsForUrl(url: string): Promise<SavedScript[]> {
-    const rows = this.db
-      .prepare(
-        `SELECT * FROM saved_scripts WHERE source_url_pattern IS NULL OR ? LIKE source_url_pattern ORDER BY use_count DESC`
-      )
-      .all(url) as any[]
-    return rows.map((r) => ({
+    await this.ready
+    return this.queryAll(
+      `SELECT * FROM saved_scripts WHERE source_url_pattern IS NULL OR ? LIKE source_url_pattern ORDER BY use_count DESC`,
+      [url]
+    ).map((r) => ({
       id: r.id,
       name: r.name,
       prompt: r.prompt,
@@ -135,43 +168,44 @@ export class SqliteBackend implements StorageBackend {
   }
 
   async deleteScript(id: string): Promise<void> {
-    this.db.prepare('DELETE FROM saved_scripts WHERE id = ?').run(id)
+    await this.ready
+    this.runSql('DELETE FROM saved_scripts WHERE id = ?', [id])
+    this.save()
   }
 
   async saveProfile(entry: ProfileEntry): Promise<void> {
-    this.db
-      .prepare(
-        `INSERT OR REPLACE INTO user_profile (key, value_json, updated_at) VALUES (?, ?, ?)`
-      )
-      .run(entry.key, JSON.stringify(entry.value), Date.now())
+    await this.ready
+    this.runSql(
+      `INSERT OR REPLACE INTO user_profile (key, value_json, updated_at) VALUES (?, ?, ?)`,
+      [entry.key, JSON.stringify(entry.value), Date.now()]
+    )
+    this.save()
   }
 
   async getProfile(key: string): Promise<ProfileEntry | null> {
-    const row = this.db.prepare('SELECT * FROM user_profile WHERE key = ?').get(key) as any
+    await this.ready
+    const row = this.queryOne('SELECT * FROM user_profile WHERE key = ?', [key])
     if (!row) return null
     return { key: row.key, value: JSON.parse(row.value_json) }
   }
 
   async saveUrls(entries: UrlCompletion[]): Promise<void> {
-    const insert = this.db.prepare(
-      `INSERT OR REPLACE INTO url_completions (url, title, visit_count, last_visited, domain, topic_cluster)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    )
-    const tx = this.db.transaction((entries: UrlCompletion[]) => {
-      for (const e of entries) {
-        insert.run(e.url, e.title ?? null, e.visitCount, e.lastVisited, e.domain, e.topicCluster ?? null)
-      }
-    })
-    tx(entries)
+    await this.ready
+    for (const e of entries) {
+      this.runSql(
+        `INSERT OR REPLACE INTO url_completions (url, title, visit_count, last_visited, domain, topic_cluster) VALUES (?, ?, ?, ?, ?, ?)`,
+        [e.url, e.title ?? null, e.visitCount, e.lastVisited, e.domain, e.topicCluster ?? null]
+      )
+    }
+    this.save()
   }
 
   async searchUrls(prefix: string, limit = 10): Promise<UrlCompletion[]> {
-    const rows = this.db
-      .prepare(
-        `SELECT * FROM url_completions WHERE url LIKE ? OR title LIKE ? ORDER BY visit_count DESC LIMIT ?`
-      )
-      .all(`%${prefix}%`, `%${prefix}%`, limit) as any[]
-    return rows.map((r) => ({
+    await this.ready
+    return this.queryAll(
+      `SELECT * FROM url_completions WHERE url LIKE ? OR title LIKE ? ORDER BY visit_count DESC LIMIT ?`,
+      [`%${prefix}%`, `%${prefix}%`, limit]
+    ).map((r) => ({
       url: r.url,
       title: r.title,
       visitCount: r.visit_count,
@@ -182,6 +216,10 @@ export class SqliteBackend implements StorageBackend {
   }
 
   close(): void {
-    this.db.close()
+    if (this.db) {
+      this.save()
+      this.db.close()
+      this.db = null
+    }
   }
 }
