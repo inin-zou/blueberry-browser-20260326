@@ -16,7 +16,13 @@ export class EventBus {
   }
 
   emit(channel: string, data: any): void {
-    this.listeners.get(channel)?.forEach((handler) => handler(data))
+    this.listeners.get(channel)?.forEach((handler) => {
+      try {
+        handler(data)
+      } catch (err) {
+        console.error(`EventBus handler error on channel "${channel}":`, err)
+      }
+    })
   }
 
   removeAll(channel: string): void {
