@@ -24,7 +24,7 @@ export const PAGE_REWRITER_SCRIPT = `
   var TEXT_POINTS = '#c7c4d7';
   var TOGGLE_BORDER = '1px solid rgba(255, 255, 255, 0.1)';
   var Z_INDEX = '2147483630';
-  var HEIGHT_COLLAPSED = '48px';
+  var HEIGHT_COLLAPSED = 'auto';
 
   // ─── Page type label map ───────────────────────────────────────────────────
   var TYPE_LABELS = {
@@ -95,11 +95,11 @@ export const PAGE_REWRITER_SCRIPT = `
     row.className = 'bb-rewriter-row';
     row.style.cssText = [
       'display:flex',
-      'align-items:center',
+      'align-items:flex-start',
       'gap:10px',
-      'padding:0 14px',
-      'height:' + HEIGHT_COLLAPSED,
+      'padding:12px 14px',
       'box-sizing:border-box',
+      'flex-wrap:wrap',
     ].join(';');
 
     // Page type badge
@@ -115,6 +115,7 @@ export const PAGE_REWRITER_SCRIPT = `
       'white-space:nowrap',
       'flex-shrink:0',
       'letter-spacing:0.01em',
+      'margin-top:2px',
     ].join(';');
 
     // TL;DR text
@@ -124,11 +125,9 @@ export const PAGE_REWRITER_SCRIPT = `
     tldrEl.style.cssText = [
       'color:' + TEXT_TLDR,
       'font-size:13px',
-      'flex:1',
-      'overflow:hidden',
-      'text-overflow:ellipsis',
-      'white-space:nowrap',
-      'line-height:1.4',
+      'flex:1 1 0%',
+      'min-width:200px',
+      'line-height:1.5',
     ].join(';');
 
     // Spacer
@@ -248,16 +247,10 @@ export const PAGE_REWRITER_SCRIPT = `
         isExpanded = !isExpanded;
         if (isExpanded) {
           pointsSection.style.display = 'block';
-          var expandedHeight = HEIGHT_COLLAPSED;
-          // Measure natural height after display:block
-          bar.style.height = 'auto';
           toggleBtn.textContent = 'Hide Points';
-          tldrEl.style.whiteSpace = 'normal';
         } else {
           pointsSection.style.display = 'none';
-          bar.style.height = HEIGHT_COLLAPSED;
           toggleBtn.textContent = 'Key Points';
-          tldrEl.style.whiteSpace = 'nowrap';
         }
       });
     }
