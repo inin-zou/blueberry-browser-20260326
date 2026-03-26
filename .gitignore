@@ -130,6 +130,9 @@ logs/
 # Vercel
 .vercel
 
+# Local model files (too large for git)
+resources/models/
+
 # Misc
 *.pem
 *.key
