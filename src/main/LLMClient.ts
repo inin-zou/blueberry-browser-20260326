@@ -301,9 +301,11 @@ export class LLMClient {
           }
           if (toolResults && toolResults.length > 0) {
             for (const tr of toolResults) {
-              const resultJson = JSON.stringify(tr.result) || 'null';
-              console.log(`[Browser Tool Result] ${tr.toolName}: ${resultJson.substring(0, 500)}`);
-              const res = tr.result as any;
+              // inputSchema tools may use tr.output instead of tr.result
+              const rawResult = (tr as any).result ?? (tr as any).output ?? null;
+              const resultJson = JSON.stringify(rawResult) || 'null';
+              console.log(`[Browser Tool Result] ${tr.toolName}: ${resultJson.substring(0, 500)} (keys: ${Object.keys(tr).join(',')})`);
+              const res = rawResult;
               if (res?.success === false && res?.error) {
                 toolActions.push(`Error: ${res.error}`);
               } else if (res?.success) {
