@@ -274,6 +274,9 @@ export class LLMClient {
       // Browser action tools (using jsonSchema for OpenAI compatibility)
       const tools = this.window ? createBrowserTools(() => this.window) : undefined;
 
+      // Track tool actions to show in chat
+      const toolActions: string[] = [];
+
       const result = await streamText({
         model: this.model,
         messages,
@@ -282,21 +285,30 @@ export class LLMClient {
         maxRetries: 3,
         abortSignal: undefined,
         onStepFinish: ({ toolCalls, toolResults }) => {
-          // Log tool usage to console for debugging
           if (toolCalls && toolCalls.length > 0) {
             for (const tc of toolCalls) {
               console.log(`[Browser Tool] ${tc.toolName}(${JSON.stringify(tc.args)})`);
+              const argsStr = Object.entries(tc.args as Record<string, any>)
+                .map(([k, v]) => `${k}: ${v}`)
+                .join(', ');
+              toolActions.push(`**${tc.toolName}**(${argsStr})`);
             }
           }
           if (toolResults && toolResults.length > 0) {
             for (const tr of toolResults) {
               console.log(`[Browser Tool Result] ${tr.toolName}: ${JSON.stringify(tr.result).substring(0, 200)}`);
+              const res = tr.result as any;
+              if (res?.success) {
+                toolActions.push(`Result: ${res.clicked || res.navigatedTo || res.typed || res.scrolled || 'done'}`);
+              } else if (res?.error) {
+                toolActions.push(`Error: ${res.error}`);
+              }
             }
           }
         },
       });
 
-      await this.processStream(result.textStream, messageId);
+      await this.processStream(result.textStream, messageId, toolActions);
     } catch (error) {
       throw error;
     }
@@ -304,7 +316,8 @@ export class LLMClient {
 
   private async processStream(
     textStream: AsyncIterable<string>,
-    messageId: string
+    messageId: string,
+    toolActions?: string[]
   ): Promise<void> {
     let accumulatedText = "";
 
@@ -330,6 +343,15 @@ export class LLMClient {
 
       this.sendStreamChunk(messageId, {
         content: chunk,
+        isComplete: false,
+      });
+    }
+
+    // If AI used tools but produced no text, show tool actions as the response
+    if (!accumulatedText.trim() && toolActions && toolActions.length > 0) {
+      accumulatedText = toolActions.join('\n');
+      this.sendStreamChunk(messageId, {
+        content: accumulatedText,
         isComplete: false,
       });
     }
