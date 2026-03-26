@@ -26,16 +26,22 @@ export function OnboardingFlow({ onComplete, onSkip }: OnboardingFlowProps) {
     })
   }, [])
 
+  const [importResult, setImportResult] = useState<{ urlCount: number; interests: string[] } | null>(null)
+
   const handleImport = async () => {
     setImporting(true)
-    setProgress('Analyzing browsing patterns...')
+    setProgress('Copying browser history...')
     try {
+      setTimeout(() => setProgress('Analyzing browsing patterns...'), 500)
       const result = await window.sidebarAPI.importHistory(Array.from(selected))
-      setProgress(`Found ${result.urlCount} URLs. Profile built.`)
-      setTimeout(onComplete, 1500)
+      setProgress('')
+      setImportResult({
+        urlCount: result.urlCount,
+        interests: result.profile?.inferredInterests || [],
+      })
     } catch {
       setProgress('Import failed. You can try again later.')
-      setTimeout(onComplete, 2000)
+      setTimeout(onComplete, 3000)
     }
   }
 
@@ -44,6 +50,52 @@ export function OnboardingFlow({ onComplete, onSkip }: OnboardingFlowProps) {
     if (next.has(id)) next.delete(id)
     else next.add(id)
     setSelected(next)
+  }
+
+  // Success state — show profile summary
+  if (importResult) {
+    return (
+      <div className="flex flex-col h-full items-center justify-center p-6">
+        <div className="w-full max-w-sm space-y-6 text-center">
+          <div className="w-14 h-14 mx-auto rounded-full bg-emerald-500/20 flex items-center justify-center">
+            <span className="text-emerald-400 text-2xl">&#10003;</span>
+          </div>
+          <div className="space-y-1">
+            <h2 className="text-lg font-bold text-[#e4e1e9]">Profile Built</h2>
+            <p className="text-sm text-[#c7c4d7]">
+              Analyzed {importResult.urlCount.toLocaleString()} URLs from your browsing history.
+            </p>
+          </div>
+
+          {importResult.interests.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[10px] font-mono text-[#918fa0] uppercase tracking-wider">Your interests</p>
+              <div className="flex flex-wrap gap-2 justify-center">
+                {importResult.interests.map((interest, i) => (
+                  <span
+                    key={i}
+                    className="px-3 py-1 text-xs rounded-full bg-[#5E5CE6]/15 text-[#C2C1FF] border border-[#5E5CE6]/20"
+                  >
+                    {interest}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <p className="text-xs text-[#918fa0]">
+            The AI co-pilot will tailor responses to your areas of interest.
+          </p>
+
+          <button
+            onClick={onComplete}
+            className="w-full px-5 py-2.5 bg-gradient-to-r from-[#5E5CE6] to-[#C2C1FF] text-white text-sm font-bold rounded-lg hover:scale-[1.02] active:scale-95 transition-transform"
+          >
+            Start Browsing
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -90,13 +142,19 @@ export function OnboardingFlow({ onComplete, onSkip }: OnboardingFlowProps) {
         </div>
 
         {progress && (
-          <p className="text-xs text-center text-[#c7c4d7] font-mono">{progress}</p>
+          <div className="space-y-2">
+            <p className="text-xs text-center text-[#c7c4d7] font-mono">{progress}</p>
+            <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-[#5E5CE6] to-[#C2C1FF] rounded-full animate-pulse" style={{ width: '60%' }}></div>
+            </div>
+          </div>
         )}
 
         <div className="flex items-center justify-between pt-2">
           <button
             onClick={onSkip}
-            className="text-sm text-[#918fa0] hover:text-[#e4e1e9] transition-colors"
+            disabled={importing}
+            className="text-sm text-[#918fa0] hover:text-[#e4e1e9] transition-colors disabled:opacity-40"
           >
             Skip for now
           </button>
