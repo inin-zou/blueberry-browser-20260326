@@ -234,12 +234,16 @@ export class LLMClient {
       "When the user asks you to DO something on the page (click, fill, navigate), use the action tools.",
       "When the user asks you to EXTRACT or ANALYZE data from the page (prices, links, tables, text), use run_in_sandbox.",
       "",
-      "IMPORTANT workflow for page interactions:",
-      "1. After navigating to a new page, ALWAYS wait then use get_page_elements or read_page to understand the page",
-      "2. Use the actual selectors returned by get_page_elements — do NOT guess selectors",
-      "3. For type_text, you can pass placeholder text as the selector — it will search by placeholder if CSS selector fails",
-      "4. If a tool returns an error, try a different approach (different selector, get_page_elements first)",
-      "5. After completing all actions, briefly summarize what you did and the results",
+      "",
+      "CRITICAL: You are an autonomous browser agent. When the user gives a multi-step task:",
+      "- Complete the ENTIRE task using multiple tool calls in sequence. Do NOT stop after one step.",
+      "- Do NOT say 'I will now...' or 'Let me...' — just DO it by calling the tools.",
+      "- After navigate, IMMEDIATELY call get_page_elements to find interactive elements on the new page.",
+      "- Use the selectors from get_page_elements — do NOT guess CSS selectors.",
+      "- For type_text, you can pass placeholder text as the selector — it searches by placeholder if CSS fails.",
+      "- If a tool errors, try get_page_elements then retry with the correct selector.",
+      "- After ALL actions are complete, give a brief summary of what happened.",
+      "- Example: 'go to X and search for Y' = navigate → get_page_elements → type_text → read results.",
     ];
 
     if (url) {
