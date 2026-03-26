@@ -141,14 +141,25 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setMessages(convertedMessages)
         }
 
+        // Listen for selection pill context (text selected on page → pill clicked)
+        const handleSelectionContext = (data: { text: string; url: string; context: string; mode: string }) => {
+            const prompt = data.mode === 'explain'
+                ? `Explain this briefly:\n\n"${data.text}"\n\nContext from the page (${data.url}):\n${data.context}`
+                : `Tell me about this:\n\n"${data.text}"\n\nFrom: ${data.url}\n\nContext:\n${data.context}`
+            // Auto-send the message
+            sendMessage(prompt)
+        }
+
         window.sidebarAPI.onChatResponse(handleChatResponse)
         window.sidebarAPI.onMessagesUpdated(handleMessagesUpdated)
+        window.sidebarAPI.onSelectionContext(handleSelectionContext)
 
         return () => {
             window.sidebarAPI.removeChatResponseListener()
             window.sidebarAPI.removeMessagesUpdatedListener()
+            window.sidebarAPI.removeSelectionContextListener()
         }
-    }, [])
+    }, [sendMessage])
 
     const value: ChatContextType = {
         messages,
