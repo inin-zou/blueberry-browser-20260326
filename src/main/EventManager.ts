@@ -1,11 +1,53 @@
 import { ipcMain, WebContents } from "electron";
 import type { Window } from "./Window";
+import { CompletionEngine } from "./CompletionEngine";
+import { AnnotationManager } from "./AnnotationManager";
+import { AttentionEngine } from "./AttentionEngine";
+import { HistoryImporter } from "./HistoryImporter";
+import { ProfileBuilder } from "./ProfileBuilder";
+import { TabSynthesizer } from "./TabSynthesizer";
+import { PageRewriter } from "./PageRewriter";
+import { SandboxManager } from "./SandboxManager";
+import { WorkflowRecorder } from "./WorkflowRecorder";
+import type { RawHistoryEntry } from "./HistoryImporter";
 
 export class EventManager {
   private mainWindow: Window;
+  private completionEngine: CompletionEngine;
+  private annotationManager: AnnotationManager;
+  private attentionEngine: AttentionEngine;
+  private historyImporter: HistoryImporter;
+  private profileBuilder: ProfileBuilder;
+  private tabSynthesizer: TabSynthesizer;
+  private pageRewriter: PageRewriter;
+  private sandboxManager: SandboxManager;
+  private workflowRecorder: WorkflowRecorder;
 
   constructor(mainWindow: Window) {
     this.mainWindow = mainWindow;
+    this.completionEngine = new CompletionEngine(this.mainWindow.aiEventLog);
+    this.annotationManager = new AnnotationManager(
+      this.mainWindow.eventBus,
+      this.mainWindow.aiEventLog,
+      () => this.mainWindow.activeTab
+    );
+    this.historyImporter = new HistoryImporter();
+    this.profileBuilder = new ProfileBuilder();
+    this.annotationManager.start();
+    this.attentionEngine = new AttentionEngine(this.mainWindow.eventBus);
+    this.attentionEngine.start();
+    this.tabSynthesizer = new TabSynthesizer(
+      this.mainWindow.eventBus,
+      this.mainWindow.aiEventLog,
+      () => this.mainWindow.allTabs,
+    );
+    this.tabSynthesizer.start();
+    this.pageRewriter = new PageRewriter(this.mainWindow.aiEventLog);
+    this.sandboxManager = new SandboxManager(this.mainWindow.aiEventLog);
+    this.workflowRecorder = new WorkflowRecorder(
+      this.mainWindow.eventBus,
+      this.mainWindow.ringBuffer,
+    );
     this.setupEventHandlers();
   }
 
@@ -24,6 +66,55 @@ export class EventManager {
 
     // Debug events
     this.handleDebugEvents();
+
+    // rrweb events from tab preload bridge
+    this.handleRrwebEvents();
+
+    // Ghost text completion events
+    this.handleCompletionEvents();
+
+    // Selection pill events
+    this.handleSelectionEvents();
+
+    // Annotation signal events (dismiss forwarding)
+    this.handleAnnotationSignalEvents();
+
+    // Browser history import events
+    this.handleHistoryEvents();
+
+    // Cross-tab synthesis events
+    this.handleSynthesisEvents();
+
+    // Page rewrite events
+    this.handlePageRewriteEvents();
+
+    // Sandbox execution events
+    this.handleSandboxEvents();
+
+    // Workflow recording events
+    this.handleWorkflowEvents();
+  }
+
+  private handleRrwebEvents(): void {
+    ipcMain.on('rrweb:event', (_event, data) => {
+      this.mainWindow.eventBus.emit('rrweb:event', data);
+      this.mainWindow.ringBuffer.push(data);
+    });
+  }
+
+  private handleCompletionEvents(): void {
+    ipcMain.on('completion:request', async (_event, data) => {
+      // Ignore internal acceptance signals sent by the ghost-text script
+      if (data && data._accepted) return;
+
+      const tab = (data && data.tabId ? this.mainWindow.getTab(data.tabId) : null)
+        ?? this.mainWindow.activeTab;
+
+      const result = await this.completionEngine.complete(data, tab);
+      if (result && tab) {
+        tab.webContents.send('completion:response', result);
+      }
+    });
   }
 
   private handleTabEvents(): void {
@@ -248,8 +339,238 @@ export class EventManager {
     });
   }
 
+  private handleAnnotationSignalEvents(): void {
+    ipcMain.on('attention:signal', (_event, data) => {
+      if (data && data.type === 'annotation:dismissed') {
+        this.mainWindow.eventBus.emit('annotation:dismissed', { annotationId: data.annotationId });
+      }
+    });
+  }
+
+  private handleSelectionEvents(): void {
+    ipcMain.on('selection:action', async (_event, data: { action: string; text: string; url: string; context: string }) => {
+      if (data.action === 'ask') {
+        const sidebar = this.mainWindow.sidebar;
+        if (!sidebar.getIsVisible()) {
+          sidebar.toggle();
+          this.mainWindow.updateAllBounds();
+        }
+        sidebar.view.webContents.send('sidebar:open-with-context', {
+          text: data.text,
+          url: data.url,
+          context: data.context,
+          mode: 'ask',
+        });
+      } else if (data.action === 'explain') {
+        // Inline explain — send brief explanation back to the tab (no sidebar)
+        const tab = this.mainWindow.activeTab;
+        if (!tab) return;
+
+        try {
+          const { streamText } = await import('ai');
+          const { getModel } = await import('./llm-provider');
+
+          const result = await streamText({
+            model: getModel(),
+            messages: [
+              {
+                role: 'system',
+                content: 'You are a concise knowledge assistant. Explain the given text in 1-2 short sentences. No emojis. No markdown. Plain text only. Be direct and informative.',
+              },
+              {
+                role: 'user',
+                content: `Explain this briefly: "${data.text}"\n\nContext from the page: ${data.context.substring(0, 500)}`,
+              },
+            ],
+            temperature: 0.3,
+            maxTokens: 100,
+          });
+
+          let explanation = '';
+          for await (const chunk of result.textStream) {
+            explanation += chunk;
+          }
+
+          // Send response back to the tab for inline rendering
+          tab.webContents.send('page:explain-response', {
+            text: data.text,
+            explanation: explanation.trim(),
+          });
+
+          // Log to AIEventLog
+          this.mainWindow.aiEventLog.log({
+            id: `explain-${Date.now()}`,
+            timestamp: Date.now(),
+            tabId: tab.id,
+            type: 'selection-explain',
+            trigger: { source: 'selection', userInput: data.text },
+            output: { model: 'cloud', content: explanation.trim(), latencyMs: 0 },
+            disposition: 'pending',
+          });
+        } catch (err) {
+          console.error('Inline explain error:', err);
+          // Fallback: open sidebar instead
+          const sidebar = this.mainWindow.sidebar;
+          if (!sidebar.getIsVisible()) {
+            sidebar.toggle();
+            this.mainWindow.updateAllBounds();
+          }
+          sidebar.view.webContents.send('sidebar:open-with-context', {
+            text: data.text,
+            url: data.url,
+            context: data.context,
+            mode: 'explain',
+          });
+        }
+      }
+    });
+  }
+
+  private handleHistoryEvents(): void {
+    ipcMain.handle('history:available-browsers', () => {
+      return this.historyImporter.getAvailableBrowsers();
+    });
+
+    ipcMain.handle('history:import', async (_event, browserIds: string[]) => {
+      console.log(`[History Import] Starting import for browsers: ${browserIds.join(', ')}`);
+      let allEntries: RawHistoryEntry[] = [];
+      for (const id of browserIds) {
+        console.log(`[History Import] Reading ${id} history...`);
+        const entries = await this.historyImporter.importBrowser(id);
+        console.log(`[History Import] ${id}: found ${entries.length} URLs`);
+        allEntries = allEntries.concat(entries);
+      }
+
+      console.log(`[History Import] Total: ${allEntries.length} URLs. Building profile...`);
+      const profile = this.profileBuilder.build(allEntries, browserIds);
+      const urlCompletions = this.profileBuilder.toUrlCompletions(allEntries);
+
+      console.log(`[History Import] Profile built. Top domains: ${profile.topDomains.slice(0, 5).map(d => d.domain).join(', ')}`);
+      console.log(`[History Import] Inferred interests: ${profile.inferredInterests.join(', ')}`);
+
+      // Feed interests into the sidebar LLM client for personalization
+      this.mainWindow.sidebar.client.setUserProfile(profile.inferredInterests);
+
+      return { profile, urlCount: urlCompletions.length };
+    });
+  }
+
+  private handleSynthesisEvents(): void {
+    // Handle synthesis request from sidebar
+    ipcMain.handle('synthesis:run', async (_event, tabIds?: string[]) => {
+      return await this.tabSynthesizer.synthesize(tabIds);
+    });
+
+    // Forward synthesis offer to sidebar
+    this.mainWindow.eventBus.on('synthesis:offer', (data) => {
+      this.mainWindow.sidebar.view.webContents.send('synthesis:offer', data);
+    });
+  }
+
+  private handlePageRewriteEvents(): void {
+    // Triggered by a button in the sidebar or topbar to analyze and rewrite the current page
+    ipcMain.handle('page:rewrite', async () => {
+      const tab = this.mainWindow.activeTab;
+      if (!tab) return null;
+      const result = await this.pageRewriter.rewrite(tab);
+      if (result) {
+        tab.webContents.send('page:rewrite', result);
+      }
+      return result;
+    });
+
+    // Restore the original page view (remove the AI overlay panel)
+    ipcMain.on('page:restore', () => {
+      const tab = this.mainWindow.activeTab;
+      if (tab) {
+        tab.webContents.send('page:restore', {});
+      }
+    });
+  }
+
+  private handleSandboxEvents(): void {
+    // Execute a script in an isolated sandbox against the current page's DOM snapshot
+    ipcMain.handle('sandbox:execute', async (_event, data: { script: string }) => {
+      const tab = this.mainWindow.activeTab;
+      if (!tab) {
+        return {
+          id: 'err',
+          status: 'error',
+          error: 'No active tab',
+          output: null,
+          consoleOutput: [],
+          executionTimeMs: 0,
+          script: data.script,
+        };
+      }
+
+      let domSnapshot: string;
+      try {
+        domSnapshot = await tab.getDomSnapshot();
+      } catch {
+        return {
+          id: 'err',
+          status: 'error',
+          error: 'Failed to capture DOM',
+          output: null,
+          consoleOutput: [],
+          executionTimeMs: 0,
+          script: data.script,
+        };
+      }
+
+      return await this.sandboxManager.execute({
+        id: `sandbox-${Date.now()}`,
+        domSnapshot,
+        script: data.script,
+        sourceTabId: tab.id,
+      });
+    });
+
+    // Apply sandbox script result to the live page
+    ipcMain.on('sandbox:apply', (_event, data: { script: string }) => {
+      const tab = this.mainWindow.activeTab;
+      if (tab) {
+        tab.runJs(data.script);
+      }
+    });
+  }
+
+  private handleWorkflowEvents(): void {
+    ipcMain.handle('workflow:start-recording', () => {
+      const tab = this.mainWindow.activeTab;
+      if (tab) {
+        this.workflowRecorder.startRecording(tab.id);
+        return { recording: true };
+      }
+      return { recording: false };
+    });
+
+    ipcMain.handle('workflow:stop-recording', async () => {
+      const recording = this.workflowRecorder.stopRecording();
+      if (!recording) return null;
+
+      const summaryPrompt = this.workflowRecorder.generateSummaryPrompt(recording);
+      return { recording, summaryPrompt };
+    });
+
+    ipcMain.handle('workflow:get-status', () => {
+      return {
+        isRecording: this.workflowRecorder.isRecording,
+        actionCount: this.workflowRecorder.actionCount,
+      };
+    });
+
+    ipcMain.handle('workflow:save', async (_event, data: { recording: any; name: string; summary: string }) => {
+      return { saved: true, id: data.recording.id };
+    });
+  }
+
   // Clean up event listeners
   public cleanup(): void {
+    this.annotationManager.stop();
+    this.attentionEngine.stop();
+    this.tabSynthesizer.stop();
     ipcMain.removeAllListeners();
   }
 }

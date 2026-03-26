@@ -5,6 +5,7 @@ import { anthropic } from "@ai-sdk/anthropic";
 import * as dotenv from "dotenv";
 import { join } from "path";
 import type { Window } from "./Window";
+import { createBrowserTools } from "./BrowserTools";
 
 // Load environment variables from .env file
 dotenv.config({ path: join(__dirname, "../../.env") });
@@ -22,8 +23,8 @@ interface StreamChunk {
 type LLMProvider = "openai" | "anthropic";
 
 const DEFAULT_MODELS: Record<LLMProvider, string> = {
-  openai: "gpt-4o-mini",
-  anthropic: "claude-3-5-sonnet-20241022",
+  openai: "gpt-4o",
+  anthropic: "claude-sonnet-4-6",
 };
 
 const MAX_CONTEXT_LENGTH = 4000;
@@ -36,6 +37,7 @@ export class LLMClient {
   private readonly modelName: string;
   private readonly model: LanguageModel | null;
   private messages: CoreMessage[] = [];
+  private userInterests: string[] = [];
 
   constructor(webContents: WebContents) {
     this.webContents = webContents;
@@ -49,6 +51,11 @@ export class LLMClient {
   // Set the window reference after construction to avoid circular dependencies
   setWindow(window: Window): void {
     this.window = window;
+  }
+
+  // Set inferred user interests from imported browser history
+  setUserProfile(interests: string[]): void {
+    this.userInterests = interests;
   }
 
   private getProvider(): LLMProvider {
@@ -203,9 +210,24 @@ export class LLMClient {
 
   private buildSystemPrompt(url: string | null, pageText: string | null): string {
     const parts: string[] = [
-      "You are a helpful AI assistant integrated into a web browser.",
-      "You can analyze and discuss web pages with the user.",
+      "You are Blueberry, a professional AI co-pilot embedded in a web browser.",
+      "You analyze web pages and assist the user with research, comprehension, and decision-making.",
+      "Be concise, precise, and professional. Avoid emojis and unnecessary filler.",
+      "Use markdown formatting for structured responses. Prefer bullet points over paragraphs when listing information.",
       "The user's messages may include screenshots of the current page as the first image.",
+      "",
+      "You have browser action tools available. You can:",
+      "- click: Click elements by CSS selector",
+      "- type_text: Type into input fields",
+      "- navigate: Go to a URL",
+      "- scroll: Scroll up or down",
+      "- read_page: Read the current page content",
+      "- run_javascript: Execute custom JS on the page",
+      "- get_page_elements: List buttons, links, and inputs on the page",
+      "",
+      "When the user asks you to do something on the page, use these tools.",
+      "Always read_page or get_page_elements first to understand the page before clicking or typing.",
+      "After taking an action, briefly confirm what you did.",
     ];
 
     if (url) {
@@ -217,9 +239,14 @@ export class LLMClient {
       parts.push(`\nPage content (text):\n${truncatedText}`);
     }
 
+    if (this.userInterests.length > 0) {
+      parts.push(`\nUser interests: ${this.userInterests.join(', ')}`);
+      parts.push("Tailor your responses to the user's areas of interest when relevant.");
+    }
+
     parts.push(
-      "\nPlease provide helpful, accurate, and contextual responses about the current webpage.",
-      "If the user asks about specific content, refer to the page content and/or screenshot provided."
+      "\nProvide accurate, contextual responses grounded in the current page content.",
+      "When referencing specific content, cite the relevant section. Be direct and actionable."
     );
 
     return parts.join("\n");
@@ -239,17 +266,34 @@ export class LLMClient {
     }
 
     try {
+      const tools = this.window ? createBrowserTools(() => this.window) : undefined;
+
       const result = await streamText({
         model: this.model,
         messages,
+        tools,
+        maxSteps: 5, // Allow up to 5 tool calls per response
         temperature: DEFAULT_TEMPERATURE,
         maxRetries: 3,
-        abortSignal: undefined, // Could add abort controller for cancellation
+        abortSignal: undefined,
+        onStepFinish: ({ toolCalls, toolResults }) => {
+          // Log tool usage to console for debugging
+          if (toolCalls && toolCalls.length > 0) {
+            for (const tc of toolCalls) {
+              console.log(`[Browser Tool] ${tc.toolName}(${JSON.stringify(tc.args)})`);
+            }
+          }
+          if (toolResults && toolResults.length > 0) {
+            for (const tr of toolResults) {
+              console.log(`[Browser Tool Result] ${tr.toolName}: ${JSON.stringify(tr.result).substring(0, 200)}`);
+            }
+          }
+        },
       });
 
       await this.processStream(result.textStream, messageId);
     } catch (error) {
-      throw error; // Re-throw to be handled by the caller
+      throw error;
     }
   }
 
