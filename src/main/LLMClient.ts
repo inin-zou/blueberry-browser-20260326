@@ -109,6 +109,7 @@ export class LLMClient {
   }
 
   async sendChatMessage(request: ChatRequest): Promise<void> {
+    console.log(`[Chat] sendChatMessage called: "${request.message?.substring(0, 50)}"`);
     try {
       // Get screenshot from active tab if available
       let screenshot: string | null = null;
@@ -161,9 +162,11 @@ export class LLMClient {
       }
 
       const messages = await this.prepareMessagesWithContext(request);
+      console.log(`[Chat] Sending ${messages.length} messages to ${this.provider}/${this.modelName}, tools: ${this.window ? 'yes' : 'no'}`);
       await this.streamResponse(messages, request.messageId);
+      console.log(`[Chat] Stream complete`);
     } catch (error) {
-      console.error("Error in LLM request:", error);
+      console.error("[Chat] Error in LLM request:", error);
       this.handleStreamError(error, request.messageId);
     }
   }
