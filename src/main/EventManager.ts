@@ -1,14 +1,29 @@
 import { ipcMain, WebContents } from "electron";
 import type { Window } from "./Window";
 import { CompletionEngine } from "./CompletionEngine";
+import { AnnotationManager } from "./AnnotationManager";
+import { HistoryImporter } from "./HistoryImporter";
+import { ProfileBuilder } from "./ProfileBuilder";
+import type { RawHistoryEntry } from "./HistoryImporter";
 
 export class EventManager {
   private mainWindow: Window;
   private completionEngine: CompletionEngine;
+  private annotationManager: AnnotationManager;
+  private historyImporter: HistoryImporter;
+  private profileBuilder: ProfileBuilder;
 
   constructor(mainWindow: Window) {
     this.mainWindow = mainWindow;
     this.completionEngine = new CompletionEngine(this.mainWindow.aiEventLog);
+    this.annotationManager = new AnnotationManager(
+      this.mainWindow.eventBus,
+      this.mainWindow.aiEventLog,
+      () => this.mainWindow.activeTab
+    );
+    this.historyImporter = new HistoryImporter();
+    this.profileBuilder = new ProfileBuilder();
+    this.annotationManager.start();
     this.setupEventHandlers();
   }
 
@@ -36,6 +51,12 @@ export class EventManager {
 
     // Selection pill events
     this.handleSelectionEvents();
+
+    // Annotation signal events (dismiss forwarding)
+    this.handleAnnotationSignalEvents();
+
+    // Browser history import events
+    this.handleHistoryEvents();
   }
 
   private handleRrwebEvents(): void {
@@ -282,6 +303,14 @@ export class EventManager {
     });
   }
 
+  private handleAnnotationSignalEvents(): void {
+    ipcMain.on('attention:signal', (_event, data) => {
+      if (data && data.type === 'annotation:dismissed') {
+        this.mainWindow.eventBus.emit('annotation:dismissed', { annotationId: data.annotationId });
+      }
+    });
+  }
+
   private handleSelectionEvents(): void {
     ipcMain.on('selection:action', (_event, data: { action: string; text: string; url: string; context: string }) => {
       if (data.action === 'ask') {
@@ -313,8 +342,39 @@ export class EventManager {
     });
   }
 
+  private handleHistoryEvents(): void {
+    ipcMain.handle('history:available-browsers', () => {
+      return this.historyImporter.getAvailableBrowsers();
+    });
+
+    ipcMain.handle('history:import', async (_event, browserIds: string[]) => {
+      let allEntries: RawHistoryEntry[] = [];
+      for (const id of browserIds) {
+        const entries = await this.historyImporter.importBrowser(id);
+        allEntries = allEntries.concat(entries);
+      }
+
+      const profile = this.profileBuilder.build(allEntries, browserIds);
+      const urlCompletions = this.profileBuilder.toUrlCompletions(allEntries);
+
+      // Persist profile and URL completions to storage
+      if (this.mainWindow.storage) {
+        await this.mainWindow.storage.saveProfile({ key: 'userProfile', value: profile });
+        if (urlCompletions.length > 0) {
+          await this.mainWindow.storage.saveUrls(urlCompletions);
+        }
+      }
+
+      // Feed interests into the sidebar LLM client
+      this.mainWindow.sidebar.client.setUserProfile(profile.inferredInterests);
+
+      return { profile, urlCount: urlCompletions.length };
+    });
+  }
+
   // Clean up event listeners
   public cleanup(): void {
+    this.annotationManager.stop();
     ipcMain.removeAllListeners();
   }
 }
