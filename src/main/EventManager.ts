@@ -7,6 +7,7 @@ import { ProfileBuilder } from "./ProfileBuilder";
 import { TabSynthesizer } from "./TabSynthesizer";
 import { PageRewriter } from "./PageRewriter";
 import { SandboxManager } from "./SandboxManager";
+import { WorkflowRecorder } from "./WorkflowRecorder";
 import type { RawHistoryEntry } from "./HistoryImporter";
 
 export class EventManager {
@@ -18,6 +19,7 @@ export class EventManager {
   private tabSynthesizer: TabSynthesizer;
   private pageRewriter: PageRewriter;
   private sandboxManager: SandboxManager;
+  private workflowRecorder: WorkflowRecorder;
 
   constructor(mainWindow: Window) {
     this.mainWindow = mainWindow;
@@ -38,6 +40,10 @@ export class EventManager {
     this.tabSynthesizer.start();
     this.pageRewriter = new PageRewriter(this.mainWindow.aiEventLog);
     this.sandboxManager = new SandboxManager(this.mainWindow.aiEventLog);
+    this.workflowRecorder = new WorkflowRecorder(
+      this.mainWindow.eventBus,
+      this.mainWindow.ringBuffer,
+    );
     this.setupEventHandlers();
   }
 
@@ -80,6 +86,9 @@ export class EventManager {
 
     // Sandbox execution events
     this.handleSandboxEvents();
+
+    // Workflow recording events
+    this.handleWorkflowEvents();
   }
 
   private handleRrwebEvents(): void {
@@ -465,6 +474,36 @@ export class EventManager {
       if (tab) {
         tab.runJs(data.script);
       }
+    });
+  }
+
+  private handleWorkflowEvents(): void {
+    ipcMain.handle('workflow:start-recording', () => {
+      const tab = this.mainWindow.activeTab;
+      if (tab) {
+        this.workflowRecorder.startRecording(tab.id);
+        return { recording: true };
+      }
+      return { recording: false };
+    });
+
+    ipcMain.handle('workflow:stop-recording', async () => {
+      const recording = this.workflowRecorder.stopRecording();
+      if (!recording) return null;
+
+      const summaryPrompt = this.workflowRecorder.generateSummaryPrompt(recording);
+      return { recording, summaryPrompt };
+    });
+
+    ipcMain.handle('workflow:get-status', () => {
+      return {
+        isRecording: this.workflowRecorder.isRecording,
+        actionCount: this.workflowRecorder.actionCount,
+      };
+    });
+
+    ipcMain.handle('workflow:save', async (_event, data: { recording: any; name: string; summary: string }) => {
+      return { saved: true, id: data.recording.id };
     });
   }
 
