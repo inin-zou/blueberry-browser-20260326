@@ -271,9 +271,13 @@ export class LLMClient {
     }
 
     try {
+      // Browser action tools (using jsonSchema for OpenAI compatibility)
+      const tools = this.window ? createBrowserTools(() => this.window) : undefined;
+
       const result = await streamText({
         model: this.model,
         messages,
+        ...(tools ? { tools, maxSteps: 5 } : {}),
         temperature: DEFAULT_TEMPERATURE,
         maxRetries: 3,
         abortSignal: undefined,
