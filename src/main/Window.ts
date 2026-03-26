@@ -7,6 +7,7 @@ import { RrwebRingBuffer } from "./RrwebRingBuffer";
 import { AIEventLog } from "./AIEventLog";
 import { InjectionRegistry } from "./InjectionRegistry";
 import { buildGhostTextScript } from "./scripts/ghost-text-script";
+import { SELECTION_PILL_SCRIPT } from "./scripts/selection-pill-script";
 
 interface WindowServices {
   eventBus: EventBus;
@@ -32,6 +33,10 @@ export class Window {
     this.ringBuffer = services.ringBuffer;
     this.aiEventLog = services.aiEventLog;
     this.injectionRegistry = services.injectionRegistry;
+
+    // Register shared injected scripts
+    this.injectionRegistry.register('selection-pill', SELECTION_PILL_SCRIPT);
+
     // Create the browser window.
     this._baseWindow = new BaseWindow({
       width: 1000,

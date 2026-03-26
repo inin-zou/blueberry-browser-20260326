@@ -33,6 +33,9 @@ export class EventManager {
 
     // Ghost text completion events
     this.handleCompletionEvents();
+
+    // Selection pill events
+    this.handleSelectionEvents();
   }
 
   private handleRrwebEvents(): void {
@@ -275,6 +278,37 @@ export class EventManager {
     this.mainWindow.allTabs.forEach((tab) => {
       if (tab.webContents !== sender) {
         tab.webContents.send("dark-mode-updated", isDarkMode);
+      }
+    });
+  }
+
+  private handleSelectionEvents(): void {
+    ipcMain.on('selection:action', (_event, data: { action: string; text: string; url: string; context: string }) => {
+      if (data.action === 'ask') {
+        const sidebar = this.mainWindow.sidebar;
+        if (!sidebar.getIsVisible()) {
+          sidebar.toggle();
+          this.mainWindow.updateAllBounds();
+        }
+        sidebar.view.webContents.send('sidebar:open-with-context', {
+          text: data.text,
+          url: data.url,
+          context: data.context,
+          mode: 'ask',
+        });
+      } else if (data.action === 'explain') {
+        // Route "explain" same as "ask" — local model will handle this in Phase 7
+        const sidebar = this.mainWindow.sidebar;
+        if (!sidebar.getIsVisible()) {
+          sidebar.toggle();
+          this.mainWindow.updateAllBounds();
+        }
+        sidebar.view.webContents.send('sidebar:open-with-context', {
+          text: data.text,
+          url: data.url,
+          context: data.context,
+          mode: 'explain',
+        });
       }
     });
   }
