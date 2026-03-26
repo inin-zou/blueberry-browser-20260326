@@ -1,6 +1,8 @@
 import { WebContents } from "electron";
 import { streamText, type LanguageModel, type CoreMessage } from "ai";
-import { openai } from "@ai-sdk/openai";
+import { createOpenAI } from "@ai-sdk/openai";
+
+const openai = createOpenAI({ compatibility: 'strict' });
 import { anthropic } from "@ai-sdk/anthropic";
 import * as dotenv from "dotenv";
 import { join } from "path";
@@ -76,7 +78,7 @@ export class LLMClient {
       case "anthropic":
         return anthropic(this.modelName);
       case "openai":
-        return openai(this.modelName);
+        return openai.chat(this.modelName);
       default:
         return null;
     }
@@ -269,13 +271,23 @@ export class LLMClient {
     }
 
     try {
-      const tools = this.window ? createBrowserTools(() => this.window) : undefined;
+      // Browser tools for agent mode
+      // Note: tools use zod schemas which need proper JSON Schema serialization
+      let tools: any = undefined;
+      let maxSteps: number | undefined = undefined;
+      try {
+        if (this.window) {
+          tools = createBrowserTools(() => this.window);
+          maxSteps = 5;
+        }
+      } catch {
+        // If tool creation fails, proceed without tools
+      }
 
       const result = await streamText({
         model: this.model,
         messages,
-        tools,
-        maxSteps: 5, // Allow up to 5 tool calls per response
+        ...(tools ? { tools, maxSteps } : {}),
         temperature: DEFAULT_TEMPERATURE,
         maxRetries: 3,
         abortSignal: undefined,
