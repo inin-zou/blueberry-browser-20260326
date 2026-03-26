@@ -1,3 +1,4 @@
+import { join } from "path";
 import { NativeImage, WebContentsView } from "electron";
 
 export class Tab {
@@ -19,6 +20,7 @@ export class Tab {
         contextIsolation: true,
         sandbox: true,
         webSecurity: true,
+        preload: join(__dirname, '../preload/tab.js'),
       },
     });
 
@@ -90,11 +92,22 @@ export class Tab {
   }
 
   async getTabHtml(): Promise<string> {
-    return await this.runJs("return document.documentElement.outerHTML");
+    return await this.runJs("document.documentElement.outerHTML");
   }
 
   async getTabText(): Promise<string> {
-    return await this.runJs("return document.documentElement.innerText");
+    return await this.runJs("document.documentElement.innerText");
+  }
+
+  async getDomSnapshot(): Promise<string> {
+    return await this.runJs(`
+      (function() {
+        const clone = document.documentElement.cloneNode(true);
+        // Remove scripts to prevent execution in sandbox
+        clone.querySelectorAll('script').forEach(s => s.remove());
+        return '<!DOCTYPE html>' + clone.outerHTML;
+      })()
+    `);
   }
 
   loadURL(url: string): Promise<void> {

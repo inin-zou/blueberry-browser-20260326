@@ -52,6 +52,48 @@ const sidebarAPI = {
 
   // Tab information
   getActiveTabInfo: () => electronAPI.ipcRenderer.invoke("get-active-tab-info"),
+
+  // Cross-tab synthesis
+  requestSynthesis: (tabIds?: string[]) =>
+    electronAPI.ipcRenderer.invoke('synthesis:run', tabIds),
+
+  onSynthesisOffer: (callback: (data: { tabCount: number; timestamp: number }) => void) => {
+    electronAPI.ipcRenderer.on('synthesis:offer', (_event, data) => callback(data));
+  },
+
+  removeSynthesisOfferListener: () => {
+    electronAPI.ipcRenderer.removeAllListeners('synthesis:offer');
+  },
+
+  // Sandbox execution
+  executeSandbox: (script: string) =>
+    electronAPI.ipcRenderer.invoke('sandbox:execute', { script }),
+
+  applySandbox: (script: string) =>
+    electronAPI.ipcRenderer.send('sandbox:apply', { script }),
+
+  // Selection pill context (from text selection on page)
+  onSelectionContext: (callback: (data: { text: string; url: string; context: string; mode: string }) => void) => {
+    electronAPI.ipcRenderer.on('sidebar:open-with-context', (_event, data) => callback(data));
+  },
+
+  removeSelectionContextListener: () => {
+    electronAPI.ipcRenderer.removeAllListeners('sidebar:open-with-context');
+  },
+
+  // Workflow recording
+  startRecording: () => electronAPI.ipcRenderer.invoke('workflow:start-recording'),
+  stopRecording: () => electronAPI.ipcRenderer.invoke('workflow:stop-recording'),
+  getRecordingStatus: () => electronAPI.ipcRenderer.invoke('workflow:get-status'),
+  saveWorkflow: (data: any) => electronAPI.ipcRenderer.invoke('workflow:save', data),
+
+  // History import
+  getAvailableBrowsers: () => electronAPI.ipcRenderer.invoke('history:available-browsers'),
+  importHistory: (browserIds: string[]) => electronAPI.ipcRenderer.invoke('history:import', browserIds),
+
+  // Page rewrite
+  rewritePage: () => electronAPI.ipcRenderer.invoke('page:rewrite'),
+  restorePage: () => electronAPI.ipcRenderer.send('page:restore'),
 };
 
 // Use `contextBridge` APIs to expose Electron APIs to

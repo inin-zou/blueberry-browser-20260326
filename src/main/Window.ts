@@ -2,6 +2,22 @@ import { BaseWindow, shell } from "electron";
 import { Tab } from "./Tab";
 import { TopBar } from "./TopBar";
 import { SideBar } from "./SideBar";
+import { EventBus } from "./EventBus";
+import { RrwebRingBuffer } from "./RrwebRingBuffer";
+import { AIEventLog } from "./AIEventLog";
+import { InjectionRegistry } from "./InjectionRegistry";
+import { buildGhostTextScript } from "./scripts/ghost-text-script";
+import { RRWEB_CAPTURE_SCRIPT } from "./scripts/rrweb-capture-script";
+import { SELECTION_PILL_SCRIPT } from "./scripts/selection-pill-script";
+import { PAGE_ANNOTATIONS_SCRIPT } from "./scripts/page-annotations-script";
+import { PAGE_REWRITER_SCRIPT } from "./scripts/page-rewriter-script";
+
+interface WindowServices {
+  eventBus: EventBus;
+  ringBuffer: RrwebRingBuffer;
+  aiEventLog: AIEventLog;
+  injectionRegistry: InjectionRegistry;
+}
 
 export class Window {
   private _baseWindow: BaseWindow;
@@ -10,8 +26,24 @@ export class Window {
   private tabCounter: number = 0;
   private _topBar: TopBar;
   private _sideBar: SideBar;
+  readonly eventBus: EventBus;
+  readonly ringBuffer: RrwebRingBuffer;
+  readonly aiEventLog: AIEventLog;
+  readonly injectionRegistry: InjectionRegistry;
 
-  constructor() {
+  constructor(services: WindowServices) {
+    this.eventBus = services.eventBus;
+    this.ringBuffer = services.ringBuffer;
+    this.aiEventLog = services.aiEventLog;
+    this.injectionRegistry = services.injectionRegistry;
+
+    // Register shared injected scripts
+    // rrweb-capture must be registered first so the event stream is active before other scripts run
+    this.injectionRegistry.register('rrweb-capture', RRWEB_CAPTURE_SCRIPT);
+    this.injectionRegistry.register('selection-pill', SELECTION_PILL_SCRIPT);
+    this.injectionRegistry.register('page-annotations', PAGE_ANNOTATIONS_SCRIPT);
+    this.injectionRegistry.register('page-rewriter', PAGE_REWRITER_SCRIPT);
+
     // Create the browser window.
     this._baseWindow = new BaseWindow({
       width: 1000,
@@ -108,6 +140,27 @@ export class Window {
     // Store the tab
     this.tabsMap.set(tabId, tab);
 
+    // Inject scripts on every page load
+    const ghostScript = buildGhostTextScript(tabId);
+    const registry = this.injectionRegistry;
+
+    tab.webContents.on("did-finish-load", async () => {
+      const fs = require('fs');
+      fs.appendFileSync('/tmp/blueberry-debug.log', `[${new Date().toISOString()}] did-finish-load for ${tabId}, URL: ${tab.url}\n`);
+      try {
+        await tab.runJs(ghostScript);
+        fs.appendFileSync('/tmp/blueberry-debug.log', `[${new Date().toISOString()}] Ghost text injected OK for ${tabId}\n`);
+      } catch (err: any) {
+        fs.appendFileSync('/tmp/blueberry-debug.log', `[${new Date().toISOString()}] Ghost text FAILED for ${tabId}: ${err.message}\n`);
+      }
+      try {
+        await registry.injectAll(tab);
+        fs.appendFileSync('/tmp/blueberry-debug.log', `[${new Date().toISOString()}] Registry scripts injected OK for ${tabId}\n`);
+      } catch (err: any) {
+        fs.appendFileSync('/tmp/blueberry-debug.log', `[${new Date().toISOString()}] Registry scripts FAILED for ${tabId}: ${err.message}\n`);
+      }
+    });
+
     // If this is the first tab, make it active
     if (this.tabsMap.size === 1) {
       this.switchActiveTab(tabId);
@@ -168,6 +221,9 @@ export class Window {
     // Show the new active tab
     tab.show();
     this.activeTabId = tabId;
+
+    // Notify all subscribers that the active tab has changed
+    this.eventBus.emit('tab:switched', { tabId, timestamp: Date.now() });
 
     // Update the window title to match the tab title
     this._baseWindow.setTitle(tab.title || "Blueberry Browser");
