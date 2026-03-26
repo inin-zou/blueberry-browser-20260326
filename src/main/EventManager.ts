@@ -593,7 +593,21 @@ export class EventManager {
     });
 
     ipcMain.handle('workflow:save', async (_event, data: { recording: any; name: string; summary: string }) => {
-      return { saved: true, id: data.recording.id };
+      try {
+        await this.mainWindow.storage.saveWorkflow({
+          id: data.recording.id,
+          name: data.name,
+          createdAt: data.recording.startTime || Date.now(),
+          durationMs: data.recording.duration || 0,
+          actionsJson: JSON.stringify(data.recording.actions || []),
+          summary: data.summary,
+        });
+        console.log(`[Workflow] Saved workflow: ${data.recording.id}`);
+        return { saved: true, id: data.recording.id };
+      } catch (err: any) {
+        console.error('[Workflow] Save failed:', err.message);
+        return { saved: false, error: err.message };
+      }
     });
 
     // Replay a recorded workflow by executing actions on the active tab

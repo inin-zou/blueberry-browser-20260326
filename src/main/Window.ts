@@ -6,6 +6,7 @@ import { EventBus } from "./EventBus";
 import { RrwebRingBuffer } from "./RrwebRingBuffer";
 import { AIEventLog } from "./AIEventLog";
 import { InjectionRegistry } from "./InjectionRegistry";
+import type { StorageBackend } from "./StorageBackend";
 import { buildGhostTextScript } from "./scripts/ghost-text-script";
 import { RRWEB_CAPTURE_SCRIPT } from "./scripts/rrweb-capture-script";
 import { SELECTION_PILL_SCRIPT } from "./scripts/selection-pill-script";
@@ -17,6 +18,7 @@ interface WindowServices {
   ringBuffer: RrwebRingBuffer;
   aiEventLog: AIEventLog;
   injectionRegistry: InjectionRegistry;
+  storage: StorageBackend;
 }
 
 export class Window {
@@ -30,12 +32,14 @@ export class Window {
   readonly ringBuffer: RrwebRingBuffer;
   readonly aiEventLog: AIEventLog;
   readonly injectionRegistry: InjectionRegistry;
+  readonly storage: StorageBackend;
 
   constructor(services: WindowServices) {
     this.eventBus = services.eventBus;
     this.ringBuffer = services.ringBuffer;
     this.aiEventLog = services.aiEventLog;
     this.injectionRegistry = services.injectionRegistry;
+    this.storage = services.storage;
 
     // Register shared injected scripts
     // rrweb-capture must be registered first so the event stream is active before other scripts run
