@@ -10,7 +10,7 @@ export const RRWEB_CAPTURE_SCRIPT = `
 
   // Load rrweb from CDN
   var script = document.createElement('script');
-  script.src = 'https://cdn.jsdelivr.net/npm/rrweb@2.0.0-alpha.13/dist/rrweb-all.umd.cjs';
+  script.src = 'https://cdn.jsdelivr.net/npm/rrweb@2.0.0-alpha.13/dist/rrweb-all.min.js';
   script.onload = function() {
     if (!window.rrweb || !window.rrweb.record) {
       console.warn('[Blueberry] rrweb loaded but record not found');
