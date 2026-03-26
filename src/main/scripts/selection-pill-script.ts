@@ -7,9 +7,13 @@ export const SELECTION_PILL_SCRIPT = `
 (function() {
   'use strict';
 
+  console.log('[Blueberry] Selection pill script injecting...');
+
   // Avoid double-injection
   if (window.__blueberrySelectionPillActive) return;
   window.__blueberrySelectionPillActive = true;
+
+  console.log('[Blueberry] Selection pill active. window.blueberry =', typeof window.blueberry);
 
   // ─── State ────────────────────────────────────────────────────────────────
   var pillHost = null;

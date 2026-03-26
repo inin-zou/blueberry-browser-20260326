@@ -72,7 +72,7 @@ export class TabSynthesizer {
       const { anthropic } = await import('@ai-sdk/anthropic')
 
       const result = await streamText({
-        model: anthropic('claude-sonnet-4-6-20250514'),
+        model: anthropic('claude-sonnet-4-6'),
         messages: [
           {
             role: 'system',

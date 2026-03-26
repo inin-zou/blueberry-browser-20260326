@@ -137,19 +137,25 @@ export class Window {
     // Store the tab
     this.tabsMap.set(tabId, tab);
 
-    // Inject ghost-text script on every page load (script is tab-specific)
+    // Inject scripts on every page load
     const ghostScript = buildGhostTextScript(tabId);
-    tab.webContents.on("did-finish-load", () => {
-      tab.runJs(ghostScript).catch((err) => {
-        console.error(`Ghost text injection failed for ${tabId}:`, err);
-      });
-    });
+    const registry = this.injectionRegistry;
 
-    // Also inject any shared scripts from the registry on page load
-    tab.webContents.on("dom-ready", () => {
-      this.injectionRegistry.injectAll(tab).catch((err) => {
-        console.error(`InjectionRegistry.injectAll failed for ${tabId}:`, err);
-      });
+    tab.webContents.on("did-finish-load", async () => {
+      const fs = require('fs');
+      fs.appendFileSync('/tmp/blueberry-debug.log', `[${new Date().toISOString()}] did-finish-load for ${tabId}, URL: ${tab.url}\n`);
+      try {
+        await tab.runJs(ghostScript);
+        fs.appendFileSync('/tmp/blueberry-debug.log', `[${new Date().toISOString()}] Ghost text injected OK for ${tabId}\n`);
+      } catch (err: any) {
+        fs.appendFileSync('/tmp/blueberry-debug.log', `[${new Date().toISOString()}] Ghost text FAILED for ${tabId}: ${err.message}\n`);
+      }
+      try {
+        await registry.injectAll(tab);
+        fs.appendFileSync('/tmp/blueberry-debug.log', `[${new Date().toISOString()}] Registry scripts injected OK for ${tabId}\n`);
+      } catch (err: any) {
+        fs.appendFileSync('/tmp/blueberry-debug.log', `[${new Date().toISOString()}] Registry scripts FAILED for ${tabId}: ${err.message}\n`);
+      }
     });
 
     // If this is the first tab, make it active
