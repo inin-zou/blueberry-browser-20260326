@@ -81,13 +81,8 @@ export class Window {
       }
     });
 
-    // Handle external link opening
-    this.tabsMap.forEach((tab) => {
-      tab.webContents.setWindowOpenHandler((details) => {
-        shell.openExternal(details.url);
-        return { action: "deny" };
-      });
-    });
+    // Handle links that would open new windows — open in current tab instead
+    // (removed shell.openExternal which was opening links in system browser)
 
     this.setupEventListeners();
   }
@@ -159,6 +154,13 @@ export class Window {
       } catch (err: any) {
         fs.appendFileSync('/tmp/blueberry-debug.log', `[${new Date().toISOString()}] Registry scripts FAILED for ${tabId}: ${err.message}\n`);
       }
+    });
+
+    // Handle links that try to open new windows — navigate in current tab instead
+    tab.webContents.setWindowOpenHandler((details) => {
+      // Navigate the current tab to the URL instead of opening external browser
+      tab.loadURL(details.url);
+      return { action: "deny" };
     });
 
     // If this is the first tab, make it active
