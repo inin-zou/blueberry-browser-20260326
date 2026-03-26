@@ -36,6 +36,11 @@ interface SidebarAPI {
 
   // Tab information
   getActiveTabInfo: () => Promise<TabInfo | null>;
+
+  // Cross-tab synthesis
+  requestSynthesis: (tabIds?: string[]) => Promise<import('../main/TabSynthesizer').SynthesisResult | null>;
+  onSynthesisOffer: (callback: (data: { tabCount: number; timestamp: number }) => void) => void;
+  removeSynthesisOfferListener: () => void;
 }
 
 declare global {

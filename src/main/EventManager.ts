@@ -4,6 +4,7 @@ import { CompletionEngine } from "./CompletionEngine";
 import { AnnotationManager } from "./AnnotationManager";
 import { HistoryImporter } from "./HistoryImporter";
 import { ProfileBuilder } from "./ProfileBuilder";
+import { TabSynthesizer } from "./TabSynthesizer";
 import type { RawHistoryEntry } from "./HistoryImporter";
 
 export class EventManager {
@@ -12,6 +13,7 @@ export class EventManager {
   private annotationManager: AnnotationManager;
   private historyImporter: HistoryImporter;
   private profileBuilder: ProfileBuilder;
+  private tabSynthesizer: TabSynthesizer;
 
   constructor(mainWindow: Window) {
     this.mainWindow = mainWindow;
@@ -24,6 +26,12 @@ export class EventManager {
     this.historyImporter = new HistoryImporter();
     this.profileBuilder = new ProfileBuilder();
     this.annotationManager.start();
+    this.tabSynthesizer = new TabSynthesizer(
+      this.mainWindow.eventBus,
+      this.mainWindow.aiEventLog,
+      () => this.mainWindow.allTabs,
+    );
+    this.tabSynthesizer.start();
     this.setupEventHandlers();
   }
 
@@ -57,6 +65,9 @@ export class EventManager {
 
     // Browser history import events
     this.handleHistoryEvents();
+
+    // Cross-tab synthesis events
+    this.handleSynthesisEvents();
   }
 
   private handleRrwebEvents(): void {
@@ -364,9 +375,22 @@ export class EventManager {
     });
   }
 
+  private handleSynthesisEvents(): void {
+    // Handle synthesis request from sidebar
+    ipcMain.handle('synthesis:run', async (_event, tabIds?: string[]) => {
+      return await this.tabSynthesizer.synthesize(tabIds);
+    });
+
+    // Forward synthesis offer to sidebar
+    this.mainWindow.eventBus.on('synthesis:offer', (data) => {
+      this.mainWindow.sidebar.view.webContents.send('synthesis:offer', data);
+    });
+  }
+
   // Clean up event listeners
   public cleanup(): void {
     this.annotationManager.stop();
+    this.tabSynthesizer.stop();
     ipcMain.removeAllListeners();
   }
 }

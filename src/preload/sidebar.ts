@@ -52,6 +52,18 @@ const sidebarAPI = {
 
   // Tab information
   getActiveTabInfo: () => electronAPI.ipcRenderer.invoke("get-active-tab-info"),
+
+  // Cross-tab synthesis
+  requestSynthesis: (tabIds?: string[]) =>
+    electronAPI.ipcRenderer.invoke('synthesis:run', tabIds),
+
+  onSynthesisOffer: (callback: (data: { tabCount: number; timestamp: number }) => void) => {
+    electronAPI.ipcRenderer.on('synthesis:offer', (_event, data) => callback(data));
+  },
+
+  removeSynthesisOfferListener: () => {
+    electronAPI.ipcRenderer.removeAllListeners('synthesis:offer');
+  },
 };
 
 // Use `contextBridge` APIs to expose Electron APIs to
