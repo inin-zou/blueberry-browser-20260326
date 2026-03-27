@@ -123,7 +123,7 @@ export function createBrowserTools(getWindow: () => Window | null) {
           await tab.loadURL(fullUrl)
           // Wait for page to load before returning
           await new Promise(resolve => setTimeout(resolve, 3000))
-          return { success: true, navigatedTo: fullUrl, hint: 'Page loaded. Now use get_page_elements to find interactive elements.' }
+          return { success: true, navigatedTo: fullUrl, hint: 'Page loaded. Use screenshot_page to visually analyze the page, or get_page_elements to find interactive elements. If inputs are not found via get_page_elements, try type_text with "search" as selector — it will find any visible input.' }
         } catch (err: any) {
           return { success: false, error: err.message }
         }
@@ -148,6 +148,31 @@ export function createBrowserTools(getWindow: () => Window | null) {
         try {
           await tab.runJs(`window.scrollBy(0, ${delta})`)
           return { success: true, scrolled: direction, pixels: px }
+        } catch (err: any) {
+          return { success: false, error: err.message }
+        }
+      },
+    }),
+
+    screenshot_page: tool({
+      description: 'Take a screenshot of the current page. Use this to visually understand the page layout, find elements that DOM queries miss (Shadow DOM, dynamic components, iframes). The screenshot will be analyzed by vision AI.',
+      inputSchema: jsonSchema<Record<string, never>>({
+        type: 'object',
+        properties: {},
+        required: [],
+      }),
+      execute: async () => {
+        const tab = getWindow()?.activeTab
+        if (!tab) return { success: false, error: 'No active tab' }
+        try {
+          const image = await tab.screenshot()
+          const dataUrl = image.toDataURL()
+          return {
+            success: true,
+            url: tab.url,
+            title: tab.title,
+            image: dataUrl,
+          }
         } catch (err: any) {
           return { success: false, error: err.message }
         }
