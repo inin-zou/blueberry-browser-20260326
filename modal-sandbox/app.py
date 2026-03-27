@@ -22,8 +22,8 @@ playwright_image = (
     )
     # Install jsdom for DOM parsing in Node.js (in /opt so Node can find it)
     .run_commands("mkdir -p /opt/node_modules && cd /opt && npm install jsdom")
-    # Install Playwright Python + browsers
-    .pip_install("playwright")
+    # Install Playwright Python + browsers + FastAPI for web endpoints
+    .pip_install("playwright", "fastapi[standard]")
     .run_commands("playwright install chromium", "playwright install-deps chromium")
 )
 
@@ -196,6 +196,25 @@ async def run_playwright(steps: list[dict]) -> dict:
         "results": results,
         "screenshots": screenshots,
     }
+
+
+# ─── Web Endpoints (called by Electron app via HTTP) ─────────────────────────
+
+@app.function(image=playwright_image, timeout=60)
+@modal.fastapi_endpoint(method="POST")
+async def api_run_script(request: dict) -> dict:
+    """POST /api_run_script { html_snapshot, script }"""
+    html_snapshot = request.get("html_snapshot", "")
+    script = request.get("script", "")
+    return await run_script.local(html_snapshot, script)
+
+
+@app.function(image=playwright_image, timeout=120)
+@modal.fastapi_endpoint(method="POST")
+async def api_run_playwright(request: dict) -> dict:
+    """POST /api_run_playwright { steps: [...] }"""
+    steps = request.get("steps", [])
+    return await run_playwright.local(steps)
 
 
 # Test entry point
