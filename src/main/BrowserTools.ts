@@ -87,7 +87,18 @@ export function createBrowserTools(getWindow: () => Window | null) {
               if (!el) return { success: false, error: 'No input field found on page' };
 
               el.focus();
-              el.value = ${JSON.stringify(text)};
+
+              // Use native setter to bypass React/Vue/Angular state tracking
+              var nativeSetter = Object.getOwnPropertyDescriptor(
+                el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype,
+                'value'
+              );
+              if (nativeSetter && nativeSetter.set) {
+                nativeSetter.set.call(el, ${JSON.stringify(text)});
+              } else {
+                el.value = ${JSON.stringify(text)};
+              }
+
               el.dispatchEvent(new Event('input', { bubbles: true }));
               el.dispatchEvent(new Event('change', { bubbles: true }));
 
@@ -241,7 +252,18 @@ export function createBrowserTools(getWindow: () => Window | null) {
               if (!found) return { success: false, error: 'No visible input found on page after exhaustive search' };
 
               found.focus();
-              found.value = text;
+
+              // Use native setter to bypass React's synthetic event system
+              var nativeSetter = Object.getOwnPropertyDescriptor(
+                found.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype,
+                'value'
+              );
+              if (nativeSetter && nativeSetter.set) {
+                nativeSetter.set.call(found, text);
+              } else {
+                found.value = text;
+              }
+
               found.dispatchEvent(new Event('input', { bubbles: true }));
               found.dispatchEvent(new Event('change', { bubbles: true }));
               found.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
