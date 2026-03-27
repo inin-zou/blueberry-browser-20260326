@@ -121,9 +121,9 @@ export function createBrowserTools(getWindow: () => Window | null) {
             fullUrl = 'https://' + fullUrl
           }
           await tab.loadURL(fullUrl)
-          // Wait for page to settle — scripts need time to inject
+          // Wait for page to load before returning
           await new Promise(resolve => setTimeout(resolve, 3000))
-          return { success: true, navigatedTo: fullUrl, hint: 'Page loaded. Call get_page_elements next to find interactive elements.' }
+          return { success: true, navigatedTo: fullUrl, hint: 'Page loaded. Now use get_page_elements to find interactive elements.' }
         } catch (err: any) {
           return { success: false, error: err.message }
         }
