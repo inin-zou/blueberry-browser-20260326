@@ -20,6 +20,8 @@ playwright_image = (
         "curl -fsSL https://deb.nodesource.com/setup_20.x | bash -",
         "apt-get install -y nodejs",
     )
+    # Install jsdom for DOM parsing in Node.js (in /opt so Node can find it)
+    .run_commands("mkdir -p /opt/node_modules && cd /opt && npm install jsdom")
     # Install Playwright Python + browsers
     .pip_install("playwright")
     .run_commands("playwright install chromium", "playwright install-deps chromium")
@@ -52,8 +54,9 @@ const html = fs.readFileSync('{html_path}', 'utf-8');
 // Minimal DOM parsing using Node's built-in
 const {{ JSDOM }} = (() => {{
     try {{ return require('jsdom'); }} catch {{
-        // Fallback: use regex-based extraction
-        return {{ JSDOM: null }};
+        try {{ return require('/opt/node_modules/jsdom'); }} catch {{
+            return {{ JSDOM: null }};
+        }}
     }}
 }})();
 
@@ -82,9 +85,6 @@ main();
         script_path = f.name
 
     try:
-        # Install jsdom for DOM parsing
-        subprocess.run(["npm", "install", "jsdom"], capture_output=True, timeout=30)
-
         result = subprocess.run(
             ["node", script_path],
             capture_output=True,
