@@ -102,7 +102,7 @@ export const AddressBar: React.FC = () => {
         }
     }
 
-    const [annotationsEnabled, setAnnotationsEnabled] = useState(true)
+    const [annotationsEnabled, setAnnotationsEnabled] = useState(false)
 
     const toggleSidebar = () => {
         setIsSidebarOpen(!isSidebarOpen)

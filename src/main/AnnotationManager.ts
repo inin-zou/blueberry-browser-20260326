@@ -19,7 +19,7 @@ export class AnnotationManager {
   private dismissCount = 0
   private isThrottled = false
   private throttleTimer: ReturnType<typeof setTimeout> | null = null
-  private _enabled = true
+  private _enabled = false
 
   // Progressive disclosure thresholds
   static readonly DISMISS_THROTTLE_COUNT = 3     // after 3 dismissed, throttle
