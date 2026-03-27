@@ -1,14 +1,28 @@
 # Blueberry Browser
 
-An AI-native browser where the AI co-pilot is embedded in the browsing experience — not waiting to be asked, not taking over completely, but co-browsing with you in real time.
+An AI-native browser where the AI doesn't wait in a sidebar for you to ask — it watches what you're doing, understands what you need, and helps before you ask.
 
 ---
 
 ## Design Philosophy
 
+Every existing AI browser falls into one of two camps: **passive** (a chatbot sidebar that waits for your prompt) or **takeover** (an agent that controls the browser while you watch). Blueberry occupies the space between — an AI that is **embedded in your browsing loop**, sensing your intent from behavior and acting alongside you.
+
 **"A browser that treats every tab as a workspace, every interaction as a signal, and every page as data the AI can read, annotate, and act on."**
 
-Blueberry is built on a 6-layer architecture inspired by next-generation AI browsers:
+### The Proactive AI Model
+
+Blueberry's AI operates on three levels simultaneously:
+
+| Level | What The AI Does | How It Triggers |
+|-------|-----------------|-----------------|
+| **Ambient Sensing** | Tracks your attention — where you dwell, how you scroll, when you hesitate, which tabs you compare | Always-on via rrweb behavioral stream. No user action needed. |
+| **Contextual Assistance** | Highlights confusing content, offers page summaries, detects you're comparing tabs and builds a comparison table | Triggered by behavioral signals. AI intervenes only when confident. |
+| **Active Execution** | Navigates pages, fills forms, extracts data, replays workflows — as an autonomous agent | Triggered by explicit user request in the sidebar chat. |
+
+The key insight: **the AI should help at the right level at the right time.** Reading an article? It silently tracks your attention. Dwelling on something confusing? It subtly highlights it. Need to search across a website? You ask, and it executes a full multi-step agent workflow.
+
+### Architecture: 6 Layers
 
 | Layer | What It Does |
 |-------|-------------|
@@ -21,56 +35,63 @@ Blueberry is built on a 6-layer architecture inspired by next-generation AI brow
 
 ### Key Principles
 
-- **Privacy-first, local-first** — browsing data (rrweb events, history, attention signals) never leaves the device. Cloud is only used for deliberate user actions.
-- **Autonomous agent** — the AI completes multi-step tasks end-to-end (navigate, find inputs, fill forms, read results) using `stopWhen: stepCountIs(10)` for proper tool chaining.
-- **React-compatible** — uses native value setter (`Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set`) to interact with React/Vue/Angular controlled inputs.
-- **Dual-model architecture** — local model (Qwen 0.5B) for instant responses, cloud LLM (GPT-4o / Claude) for deep reasoning.
-- **Event-sourced design** — every AI action is logged to AIEventLog, debuggable, and reversible.
+- **Proactive but not annoying** — AI starts silent, escalates only with behavioral evidence (dwell > 3s, scroll-back, rapid tab switching). Throttles after 3 dismissed annotations. User controls via eye icon toggle.
+- **Privacy-first, local-first** — all behavioral data (rrweb events, attention signals, browsing history) stays on-device. Cloud is only used when you explicitly ask the AI to act.
+- **Personalized from day one** — imports your Chrome/Safari/Firefox history on first launch, builds a profile of your interests, and tailors AI responses accordingly.
+- **Autonomous agent when needed** — completes multi-step tasks end-to-end (navigate → find inputs → fill forms → read results) using a proper tool-chaining loop.
+- **Dual-model** — local Qwen 0.5B for instant tooltips, cloud LLM (GPT-4o / Claude) for deep reasoning and agent tasks.
+- **Event-sourced** — every AI action is logged, debuggable, and reversible.
 
 ---
 
 ## Features
 
-### Browser Agent (9 Tools)
+### Proactive Intelligence (No User Action Required)
 
-The AI sidebar chat is an autonomous browser agent that can take actions on the page:
+These features work in the background — the AI observes your behavior and helps when it detects a signal:
+
+**Attention Engine** — Continuously tracks your browsing behavior via rrweb:
+- Mouse dwell (3s+ without movement) → the AI thinks you're confused
+- Slow scroll velocity → the AI thinks you're reading carefully
+- Scroll-back (re-reading) → the AI thinks you missed something
+- Rapid tab switching (3+ in 60s) → the AI thinks you're comparing
+
+**Page Annotations** — When the attention engine detects confusion, subtle purple highlights appear on the content you're dwelling on. Disabled by default — toggle via the eye icon in the address bar. Progressive disclosure: throttles after 3 dismissed annotations, backs off for 10 minutes.
+
+**Cross-Tab Synthesis** — When you're rapidly switching between tabs (e.g., comparing GPU providers), a banner appears: *"Comparing 3 tabs? Generate a comparison table?"* Click to get a structured comparison with recommendations.
+
+**Ghost Text Auto-Completion** — As you type in any text field on any webpage, AI-predicted completions appear as dimmed ghost text. Context-aware of your other open tabs and browsing history. Tab to accept, Esc to dismiss.
+
+### Contextual Tools (User-Triggered, Context-Aware)
+
+These features are triggered by a specific user action, but the AI uses full page context:
+
+**Text Selection Pill** — Select any text on a page and a floating glass pill appears:
+- **Explain** — inline tooltip with 1-2 sentence explanation, rendered below the selection (not in sidebar)
+- **Ask AI** — opens sidebar with selected text + surrounding paragraph as context
+
+**Page Summarization** — Click "Summarize Page" in the sidebar:
+- Classifies the page type (article, docs, product, dashboard)
+- Generates a TL;DR summary
+- Lists clickable key points that scroll to the relevant section on the page
+
+### Autonomous Agent (9 Browser Tools)
+
+When you ask the AI to *do something*, it becomes a full autonomous browser agent:
 
 | Tool | What It Does |
 |------|-------------|
 | `navigate` | Go to any URL, waits for page load |
 | `click` | Click elements by CSS selector |
-| `type_text` | Type into inputs with placeholder/aria-label fallback search |
-| `find_and_fill_input` | Deep input finder — searches Shadow DOM, clicks search-like elements, uses React native setter, auto-submits |
+| `type_text` | Type into inputs with placeholder/aria-label fallback |
+| `find_and_fill_input` | Deep input finder — Shadow DOM, React native setter, auto-submits |
 | `scroll` | Scroll up or down |
 | `read_page` | Read page text content |
 | `run_javascript` | Execute custom JS on the page |
-| `run_in_sandbox` | Execute JS in isolated sandbox against DOM snapshot (safe data extraction) |
+| `run_in_sandbox` | Execute JS in isolated cloud sandbox (Modal) for safe data extraction |
 | `get_page_elements` | List buttons, links, and inputs on the page |
 
-Example: *"Go to blocket.se and search for a hello kitty bag"* — the agent navigates, finds the search input (even in Shadow DOM), fills it using React-compatible native setter, submits, and reads the results.
-
-### Text Selection Pill
-
-Select any text on a page and a floating glass pill appears:
-- **Explain** — inline tooltip with 1-2 sentence explanation (no sidebar needed)
-- **Ask AI** — opens sidebar with selected text as context for deeper conversation
-
-### Ghost Text Auto-Completion
-
-Copilot-style Tab completion in any text field on any webpage. Context-aware of your other open tabs and browsing history. 500ms debounce, Tab to accept, Esc to dismiss.
-
-### Page Summarization
-
-Click "Summarize Page" in the sidebar to get:
-- Page type classification (article, docs, product, dashboard)
-- TL;DR summary
-- Clickable key points that scroll to the relevant section on the page
-
-### Intelligent Sensing
-
-- **Attention Engine** — Tracks mouse dwell (3s+), scroll velocity, scroll-back patterns, and tab switching via rrweb behavioral data
-- **Page Annotations** — Proactive highlights on content you're dwelling on. Disabled by default — toggle via eye icon in address bar. Progressive disclosure (throttles after 3 dismissals)
-- **Cross-Tab Synthesis** — Detects rapid tab switching (3+ in 60s), offers structured comparison table
+Example: *"Go to blocket.se and search for a hello kitty bag"* — the agent navigates, finds the search input (even in Shadow DOM), fills it using React-compatible native setter, submits, and reads the results. All steps shown in the chat.
 
 ### Code Sandbox (Modal Cloud + Local Fallback)
 
