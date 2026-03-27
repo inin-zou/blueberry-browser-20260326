@@ -8,6 +8,7 @@ import * as dotenv from "dotenv";
 import { join } from "path";
 import type { Window } from "./Window";
 import { createBrowserTools } from "./BrowserTools";
+import type { SandboxManager } from "./SandboxManager";
 
 // Load environment variables from .env file
 dotenv.config({ path: join(__dirname, "../../.env") });
@@ -35,6 +36,7 @@ const DEFAULT_TEMPERATURE = 0.7;
 export class LLMClient {
   private readonly webContents: WebContents;
   private window: Window | null = null;
+  private sandboxManager: SandboxManager | null = null;
   private readonly provider: LLMProvider;
   private readonly modelName: string;
   private readonly model: LanguageModel | null;
@@ -53,6 +55,11 @@ export class LLMClient {
   // Set the window reference after construction to avoid circular dependencies
   setWindow(window: Window): void {
     this.window = window;
+  }
+
+  // Set the shared SandboxManager instance to avoid per-call instantiation
+  setSandboxManager(manager: SandboxManager): void {
+    this.sandboxManager = manager;
   }
 
   // Set inferred user interests from imported browser history
@@ -291,7 +298,7 @@ export class LLMClient {
 
     try {
       // Browser action tools (using jsonSchema for OpenAI compatibility)
-      const tools = this.window ? createBrowserTools(() => this.window) : undefined;
+      const tools = this.window ? createBrowserTools(() => this.window, this.sandboxManager ?? undefined) : undefined;
 
       // Track tool actions to show in chat
       const toolActions: string[] = [];
