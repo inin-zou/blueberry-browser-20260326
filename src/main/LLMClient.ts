@@ -1,5 +1,5 @@
 import { WebContents } from "electron";
-import { streamText, type LanguageModel, type CoreMessage } from "ai";
+import { streamText, stepCountIs, type LanguageModel, type CoreMessage } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 
 const openai = createOpenAI({ compatibility: 'strict' });
@@ -231,23 +231,26 @@ export class LLMClient {
       "- run_in_sandbox: Run JS in an isolated sandbox to extract/analyze page data safely",
       "- get_page_elements: List buttons, links, and inputs on the page",
       "",
-      "CRITICAL: You are an AUTONOMOUS browser agent. When the user gives you a task, complete ALL steps without stopping.",
-      "Do NOT stop after just one action. Keep calling tools until the task is fully complete.",
+      "CRITICAL: You are an AUTONOMOUS browser agent.",
+      "When a task requires multiple steps, call ALL tools in a SINGLE response — do NOT generate any text between tool calls.",
+      "Only write a text response AFTER all tool calls are complete.",
       "",
-      "Example: 'go to example.com and search for shoes':",
-      "  Step 1: navigate('https://example.com')",
-      "  Step 2: get_page_elements('inputs') — find the search box",
-      "  Step 3: type_text(selector, 'shoes') — type and submit",
-      "  Step 4: read_page() — read the search results",
-      "  Step 5: respond with a summary of what you found",
+      "Example for 'go to example.com and search for shoes':",
+      "Call these tools in ONE response (no text between them):",
+      "1. navigate(url: 'https://example.com')",
+      "2. get_page_elements(element_type: 'inputs')",
+      "3. type_text(selector: 'input[name=search]', text: 'shoes')",
+      "4. read_page()",
+      "Then write your summary text.",
       "",
       "Rules:",
-      "- After navigating, ALWAYS call get_page_elements to understand the new page",
-      "- Use actual selectors from get_page_elements — do NOT guess CSS selectors",
-      "- For type_text, you can pass placeholder text as selector (fallback search)",
-      "- If a tool fails, try a different approach immediately",
-      "- For data extraction tasks, use run_in_sandbox",
-      "- Keep going until the task is DONE, then summarize results",
+      "- Call multiple tools in sequence within one response when possible",
+      "- After navigate, ALWAYS call get_page_elements next",
+      "- Use selectors from get_page_elements — do NOT guess",
+      "- For type_text, placeholder text works as selector (fallback search)",
+      "- If a tool fails, immediately retry with different approach",
+      "- For data extraction, use run_in_sandbox",
+      "- Do NOT write text until the task is fully complete",
     ];
 
     if (url) {
@@ -295,7 +298,7 @@ export class LLMClient {
       const result = await streamText({
         model: this.model,
         messages,
-        ...(tools ? { tools, maxSteps: 10 } : {}),
+        ...(tools ? { tools, stopWhen: stepCountIs(10) } : {}),
         temperature: DEFAULT_TEMPERATURE,
         maxRetries: 3,
         abortSignal: undefined,
