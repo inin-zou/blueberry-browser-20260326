@@ -154,25 +154,87 @@ export function createBrowserTools(getWindow: () => Window | null) {
       },
     }),
 
-    screenshot_page: tool({
-      description: 'Take a screenshot of the current page. Use this to visually understand the page layout, find elements that DOM queries miss (Shadow DOM, dynamic components, iframes). The screenshot will be analyzed by vision AI.',
-      inputSchema: jsonSchema<Record<string, never>>({
+    find_and_fill_input: tool({
+      description: 'Find any visible text input on the page and type into it. Use this when get_page_elements returns no inputs — this tool searches more broadly including Shadow DOM, iframes, and dynamically loaded elements. It will find the most prominent search/text input and type your text.',
+      inputSchema: jsonSchema<{ text: string }>({
         type: 'object',
-        properties: {},
-        required: [],
+        properties: {
+          text: { type: 'string', description: 'Text to type into the found input' },
+        },
+        required: ['text'],
       }),
-      execute: async () => {
+      execute: async ({ text }) => {
         const tab = getWindow()?.activeTab
         if (!tab) return { success: false, error: 'No active tab' }
         try {
-          const image = await tab.screenshot()
-          const dataUrl = image.toDataURL()
-          return {
-            success: true,
-            url: tab.url,
-            title: tab.title,
-            image: dataUrl,
-          }
+          return await tab.runJs(`
+            (function() {
+              var text = ${JSON.stringify(text)};
+
+              // Strategy 1: Find any visible input/textarea
+              var inputs = document.querySelectorAll('input[type="text"], input[type="search"], input:not([type]), textarea, [contenteditable="true"], [role="searchbox"], [role="combobox"]');
+              var found = null;
+              for (var i = 0; i < inputs.length; i++) {
+                var rect = inputs[i].getBoundingClientRect();
+                if (rect.width > 50 && rect.height > 10 && rect.top < window.innerHeight) {
+                  found = inputs[i];
+                  break;
+                }
+              }
+
+              // Strategy 2: Search in shadow DOMs
+              if (!found) {
+                var allElements = document.querySelectorAll('*');
+                for (var i = 0; i < allElements.length; i++) {
+                  if (allElements[i].shadowRoot) {
+                    var shadowInputs = allElements[i].shadowRoot.querySelectorAll('input, textarea, [contenteditable]');
+                    for (var j = 0; j < shadowInputs.length; j++) {
+                      var rect = shadowInputs[j].getBoundingClientRect();
+                      if (rect.width > 50 && rect.height > 10) {
+                        found = shadowInputs[j];
+                        break;
+                      }
+                    }
+                    if (found) break;
+                  }
+                }
+              }
+
+              // Strategy 3: Click on anything that looks like a search bar then find the input
+              if (!found) {
+                var searchLike = document.querySelectorAll('[class*="search"], [class*="Search"], [id*="search"], [aria-label*="search"], [aria-label*="Sök"], [placeholder*="Sök"], [placeholder*="search"]');
+                for (var i = 0; i < searchLike.length; i++) {
+                  searchLike[i].click();
+                }
+                // Re-check after clicking
+                inputs = document.querySelectorAll('input[type="text"], input[type="search"], input:not([type]), textarea');
+                for (var i = 0; i < inputs.length; i++) {
+                  var rect = inputs[i].getBoundingClientRect();
+                  if (rect.width > 50 && rect.height > 10 && rect.top < window.innerHeight) {
+                    found = inputs[i];
+                    break;
+                  }
+                }
+              }
+
+              if (!found) return { success: false, error: 'No visible input found on page after exhaustive search' };
+
+              found.focus();
+              found.value = text;
+              found.dispatchEvent(new Event('input', { bubbles: true }));
+              found.dispatchEvent(new Event('change', { bubbles: true }));
+              found.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+              found.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+
+              // Also try submitting the parent form
+              var form = found.closest('form');
+              if (form) {
+                form.dispatchEvent(new Event('submit', { bubbles: true }));
+              }
+
+              return { success: true, typed: text, foundVia: found.tagName + ' ' + (found.placeholder || found.name || found.className || '').substring(0, 50) };
+            })()
+          `)
         } catch (err: any) {
           return { success: false, error: err.message }
         }
