@@ -72,14 +72,21 @@ Click "Summarize Page" in the sidebar to get:
 - **Page Annotations** — Proactive highlights on content you're dwelling on. Disabled by default — toggle via eye icon in address bar. Progressive disclosure (throttles after 3 dismissals)
 - **Cross-Tab Synthesis** — Detects rapid tab switching (3+ in 60s), offers structured comparison table
 
-### Code Sandbox
+### Code Sandbox (Modal Cloud + Local Fallback)
 
 Ask the AI to extract data from a page:
 - *"Extract all the links from this page"*
 - *"Get all headings and their text"*
 - *"Find all prices on this page"*
 
-The AI writes JavaScript, executes it in an isolated sandbox against a DOM snapshot, and shows the results in chat.
+The AI writes JavaScript, executes it in an **isolated cloud sandbox** (Modal with Node.js + jsdom + Playwright), and shows the results in chat.
+
+| Mode | When | Runtime |
+|------|------|---------|
+| **Modal (cloud)** | `MODAL_TOKEN_ID` is set in `.env` | Debian container with Node.js 20, jsdom, Playwright + Chromium |
+| **Local (fallback)** | Modal tokens not configured or Modal unreachable | Electron WebContentsView with `sandbox: true` |
+
+Modal also provides `run_playwright` for full browser automation in the cloud (navigate, click, type, screenshot in a headless Chromium).
 
 ### Workflow Recorder
 
@@ -117,6 +124,7 @@ Qwen2.5-0.5B-Instruct runs locally via ONNX Runtime + WebGPU/WASM:
 | Cloud LLM | Vercel AI SDK 5 + OpenAI / Anthropic (configurable via `.env`) |
 | Agent Loop | `streamText` + `stopWhen: stepCountIs(10)` + `jsonSchema` tools |
 | Local Model | Qwen2.5-0.5B via @huggingface/transformers |
+| Cloud Sandbox | Modal (Debian + Node.js 20 + Playwright + Chromium + jsdom) |
 | Session Recording | rrweb v2 (CDN-loaded into tabs) |
 | Testing | Vitest (134 unit tests across 17 test files) |
 
@@ -135,7 +143,7 @@ Electron App
     CompletionEngine    Ghost text completions
     TabSynthesizer      Cross-tab comparison detection + generation
     PageRewriter        Page type classification + TL;DR with clickable anchors
-    SandboxManager      Isolated WebContentsView for safe script execution
+    SandboxManager      Modal cloud sandbox (primary) + local WebContentsView (fallback)
     WorkflowRecorder    Records rrweb events into structured action logs
     LocalModelManager   Qwen2.5-0.5B in hidden WebContentsView
     ModelRouter         Routes between local (fast) and cloud (deep) models
@@ -188,9 +196,10 @@ OPENAI_API_KEY=sk-...
 # LLM_MODEL=claude-sonnet-4-6
 # ANTHROPIC_API_KEY=sk-ant-...
 
-# Optional: Modal for cloud sandbox (not required for local sandbox)
-# MODAL_TOKEN_ID=ak-...
-# MODAL_TOKEN_SECRET=as-...
+# Modal cloud sandbox (enables cloud execution with Playwright + jsdom)
+MODAL_TOKEN_ID=ak-...
+MODAL_TOKEN_SECRET=as-...
+# Deploy first: cd modal-sandbox && modal deploy app.py
 ```
 
 ### Development
@@ -239,7 +248,7 @@ Dark mode with glassmorphism accents. Apple-inspired flat minimalism.
 ## Future Roadmap
 
 - Supabase sync layer for multi-device persistence
-- Modal cloud sandbox for multi-language script execution (Python, TypeScript)
+- Modal sandbox: multi-language execution (Python, TypeScript) and VLM-powered visual verification
 - VLM-powered visual page understanding (screenshot analysis)
 - Workflow marketplace (share/import community workflows)
 - Team collaboration (shared annotations, shared workflows)
@@ -261,4 +270,7 @@ src/
     common/            Shared components and hooks
 .claude/docs/          Design documentation (10 docs)
 resources/models/      Local AI model files (Qwen2.5-0.5B)
+modal-sandbox/         Modal cloud sandbox (Playwright + jsdom)
+  app.py               Two functions: run_script + run_playwright
+  README.md            Setup and API docs
 ```
