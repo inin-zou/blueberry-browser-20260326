@@ -1,10 +1,27 @@
 import { tool, jsonSchema } from 'ai'
 import type { Window } from './Window'
+import { SandboxManager } from './SandboxManager'
+
+// Shared JS snippet for React-compatible input value setting.
+// Use SET_NATIVE_VALUE.replace(/__TEXT__/g, JSON.stringify(text)) before embedding.
+const SET_NATIVE_VALUE = `
+  var nativeSetter = Object.getOwnPropertyDescriptor(
+    el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype,
+    'value'
+  );
+  if (nativeSetter && nativeSetter.set) {
+    nativeSetter.set.call(el, __TEXT__);
+  } else {
+    el.value = __TEXT__;
+  }
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+`
 
 /**
  * Browser action tools using jsonSchema (not zod) for OpenAI compatibility.
  */
-export function createBrowserTools(getWindow: () => Window | null) {
+export function createBrowserTools(getWindow: () => Window | null, sandboxManager?: SandboxManager) {
   return {
     click: tool({
       description: 'Click an element on the current page by CSS selector.',
@@ -89,18 +106,7 @@ export function createBrowserTools(getWindow: () => Window | null) {
               el.focus();
 
               // Use native setter to bypass React/Vue/Angular state tracking
-              var nativeSetter = Object.getOwnPropertyDescriptor(
-                el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype,
-                'value'
-              );
-              if (nativeSetter && nativeSetter.set) {
-                nativeSetter.set.call(el, ${JSON.stringify(text)});
-              } else {
-                el.value = ${JSON.stringify(text)};
-              }
-
-              el.dispatchEvent(new Event('input', { bubbles: true }));
-              el.dispatchEvent(new Event('change', { bubbles: true }));
+              ${SET_NATIVE_VALUE.replace(/__TEXT__/g, JSON.stringify(text))}
 
               // Try pressing Enter to submit search
               el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
@@ -254,18 +260,8 @@ export function createBrowserTools(getWindow: () => Window | null) {
               found.focus();
 
               // Use native setter to bypass React's synthetic event system
-              var nativeSetter = Object.getOwnPropertyDescriptor(
-                found.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype,
-                'value'
-              );
-              if (nativeSetter && nativeSetter.set) {
-                nativeSetter.set.call(found, text);
-              } else {
-                found.value = text;
-              }
-
-              found.dispatchEvent(new Event('input', { bubbles: true }));
-              found.dispatchEvent(new Event('change', { bubbles: true }));
+              var el = found;
+              ${SET_NATIVE_VALUE.replace(/__TEXT__/g, JSON.stringify(text))}
               found.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
               found.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
 
@@ -346,10 +342,8 @@ export function createBrowserTools(getWindow: () => Window | null) {
           // Get DOM snapshot
           const domSnapshot = await tab.getDomSnapshot()
 
-          // Import and use SandboxManager
-          const { SandboxManager } = await import('./SandboxManager')
-          const { AIEventLog } = await import('./AIEventLog')
-          const sandbox = new SandboxManager(win.aiEventLog)
+          // Use the shared SandboxManager if provided, otherwise create a fallback instance
+          const sandbox = sandboxManager ?? new SandboxManager(win!.aiEventLog)
 
           const result = await sandbox.execute({
             id: `sandbox-${Date.now()}`,

@@ -144,20 +144,8 @@ export class Window {
     const registry = this.injectionRegistry;
 
     tab.webContents.on("did-finish-load", async () => {
-      const fs = require('fs');
-      fs.appendFileSync('/tmp/blueberry-debug.log', `[${new Date().toISOString()}] did-finish-load for ${tabId}, URL: ${tab.url}\n`);
-      try {
-        await tab.runJs(ghostScript);
-        fs.appendFileSync('/tmp/blueberry-debug.log', `[${new Date().toISOString()}] Ghost text injected OK for ${tabId}\n`);
-      } catch (err: any) {
-        fs.appendFileSync('/tmp/blueberry-debug.log', `[${new Date().toISOString()}] Ghost text FAILED for ${tabId}: ${err.message}\n`);
-      }
-      try {
-        await registry.injectAll(tab);
-        fs.appendFileSync('/tmp/blueberry-debug.log', `[${new Date().toISOString()}] Registry scripts injected OK for ${tabId}\n`);
-      } catch (err: any) {
-        fs.appendFileSync('/tmp/blueberry-debug.log', `[${new Date().toISOString()}] Registry scripts FAILED for ${tabId}: ${err.message}\n`);
-      }
+      try { await tab.runJs(ghostScript); } catch (err) { console.error('[Window] Ghost text injection failed:', err); }
+      try { await registry.injectAll(tab); } catch (err) { console.error('[Window] Registry injection failed:', err); }
     });
 
     // Handle links that try to open new windows — navigate in current tab instead

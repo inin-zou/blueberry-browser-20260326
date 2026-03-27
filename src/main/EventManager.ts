@@ -1,6 +1,12 @@
 import { ipcMain, WebContents } from "electron";
+import { streamText } from "ai";
 import type { Window } from "./Window";
 import { CompletionEngine } from "./CompletionEngine";
+import { getModel } from "./llm-provider";
+
+const EXPLAIN_SYSTEM_PROMPT =
+  'You are a concise knowledge assistant. Explain the given text in 1-2 short sentences. ' +
+  'No emojis. No markdown. Plain text only. Be direct and informative.';
 import { AnnotationManager } from "./AnnotationManager";
 import { AttentionEngine } from "./AttentionEngine";
 import { HistoryImporter } from "./HistoryImporter";
@@ -22,6 +28,8 @@ export class EventManager {
   private pageRewriter: PageRewriter;
   private sandboxManager: SandboxManager;
   private workflowRecorder: WorkflowRecorder;
+  private readonly ipcHandleChannels: string[] = [];
+  private readonly ipcOnChannels: string[] = [];
 
   constructor(mainWindow: Window) {
     this.mainWindow = mainWindow;
@@ -48,7 +56,19 @@ export class EventManager {
       this.mainWindow.eventBus,
       this.mainWindow.ringBuffer,
     );
+    // Share the sandboxManager with the LLM client so browser tools reuse the same instance
+    this.mainWindow.sidebar.client.setSandboxManager(this.sandboxManager);
     this.setupEventHandlers();
+  }
+
+  private handle(channel: string, handler: any): void {
+    ipcMain.handle(channel, handler);
+    this.ipcHandleChannels.push(channel);
+  }
+
+  private on(channel: string, handler: any): void {
+    ipcMain.on(channel, handler);
+    this.ipcOnChannels.push(channel);
   }
 
   private setupEventHandlers(): void {
@@ -80,14 +100,14 @@ export class EventManager {
     this.handleAnnotationSignalEvents();
 
     // Annotation toggle (enable/disable from topbar)
-    ipcMain.handle('annotations:toggle', () => {
+    this.handle('annotations:toggle', () => {
       const newState = !this.annotationManager.enabled;
       this.annotationManager.setEnabled(newState);
       console.log(`[Annotations] ${newState ? 'Enabled' : 'Disabled'}`);
       return { enabled: newState };
     });
 
-    ipcMain.handle('annotations:status', () => {
+    this.handle('annotations:status', () => {
       return { enabled: this.annotationManager.enabled };
     });
 
@@ -109,7 +129,7 @@ export class EventManager {
 
   private handleRrwebEvents(): void {
     let rrwebEventCount = 0;
-    ipcMain.on('rrweb:event', (_event, data) => {
+    this.on('rrweb:event', (_event, data) => {
       rrwebEventCount++;
       if (rrwebEventCount <= 3 || rrwebEventCount % 100 === 0) {
         console.log(`[rrweb] Event #${rrwebEventCount} type=${data?.type} source=${data?.data?.source}`);
@@ -120,7 +140,7 @@ export class EventManager {
   }
 
   private handleCompletionEvents(): void {
-    ipcMain.on('completion:request', async (_event, data) => {
+    this.on('completion:request', async (_event, data) => {
       // Ignore internal acceptance signals sent by the ghost-text script
       if (data && data._accepted) return;
 
@@ -136,23 +156,23 @@ export class EventManager {
 
   private handleTabEvents(): void {
     // Create new tab
-    ipcMain.handle("create-tab", (_, url?: string) => {
+    this.handle("create-tab", (_, url?: string) => {
       const newTab = this.mainWindow.createTab(url);
       return { id: newTab.id, title: newTab.title, url: newTab.url };
     });
 
     // Close tab
-    ipcMain.handle("close-tab", (_, id: string) => {
+    this.handle("close-tab", (_, id: string) => {
       this.mainWindow.closeTab(id);
     });
 
     // Switch tab
-    ipcMain.handle("switch-tab", (_, id: string) => {
+    this.handle("switch-tab", (_, id: string) => {
       this.mainWindow.switchActiveTab(id);
     });
 
     // Get tabs
-    ipcMain.handle("get-tabs", () => {
+    this.handle("get-tabs", () => {
       const activeTabId = this.mainWindow.activeTab?.id;
       return this.mainWindow.allTabs.map((tab) => ({
         id: tab.id,
@@ -163,13 +183,13 @@ export class EventManager {
     });
 
     // Navigation (for compatibility with existing code)
-    ipcMain.handle("navigate-to", (_, url: string) => {
+    this.handle("navigate-to", (_, url: string) => {
       if (this.mainWindow.activeTab) {
         this.mainWindow.activeTab.loadURL(url);
       }
     });
 
-    ipcMain.handle("navigate-tab", async (_, tabId: string, url: string) => {
+    this.handle("navigate-tab", async (_, tabId: string, url: string) => {
       const tab = this.mainWindow.getTab(tabId);
       if (tab) {
         await tab.loadURL(url);
@@ -178,26 +198,26 @@ export class EventManager {
       return false;
     });
 
-    ipcMain.handle("go-back", () => {
+    this.handle("go-back", () => {
       if (this.mainWindow.activeTab) {
         this.mainWindow.activeTab.goBack();
       }
     });
 
-    ipcMain.handle("go-forward", () => {
+    this.handle("go-forward", () => {
       if (this.mainWindow.activeTab) {
         this.mainWindow.activeTab.goForward();
       }
     });
 
-    ipcMain.handle("reload", () => {
+    this.handle("reload", () => {
       if (this.mainWindow.activeTab) {
         this.mainWindow.activeTab.reload();
       }
     });
 
     // Tab-specific navigation handlers
-    ipcMain.handle("tab-go-back", (_, tabId: string) => {
+    this.handle("tab-go-back", (_, tabId: string) => {
       const tab = this.mainWindow.getTab(tabId);
       if (tab) {
         tab.goBack();
@@ -206,7 +226,7 @@ export class EventManager {
       return false;
     });
 
-    ipcMain.handle("tab-go-forward", (_, tabId: string) => {
+    this.handle("tab-go-forward", (_, tabId: string) => {
       const tab = this.mainWindow.getTab(tabId);
       if (tab) {
         tab.goForward();
@@ -215,7 +235,7 @@ export class EventManager {
       return false;
     });
 
-    ipcMain.handle("tab-reload", (_, tabId: string) => {
+    this.handle("tab-reload", (_, tabId: string) => {
       const tab = this.mainWindow.getTab(tabId);
       if (tab) {
         tab.reload();
@@ -224,7 +244,7 @@ export class EventManager {
       return false;
     });
 
-    ipcMain.handle("tab-screenshot", async (_, tabId: string) => {
+    this.handle("tab-screenshot", async (_, tabId: string) => {
       const tab = this.mainWindow.getTab(tabId);
       if (tab) {
         const image = await tab.screenshot();
@@ -233,7 +253,7 @@ export class EventManager {
       return null;
     });
 
-    ipcMain.handle("tab-run-js", async (_, tabId: string, code: string) => {
+    this.handle("tab-run-js", async (_, tabId: string, code: string) => {
       const tab = this.mainWindow.getTab(tabId);
       if (tab) {
         return await tab.runJs(code);
@@ -242,7 +262,7 @@ export class EventManager {
     });
 
     // Tab info
-    ipcMain.handle("get-active-tab-info", () => {
+    this.handle("get-active-tab-info", () => {
       const activeTab = this.mainWindow.activeTab;
       if (activeTab) {
         return {
@@ -259,33 +279,33 @@ export class EventManager {
 
   private handleSidebarEvents(): void {
     // Toggle sidebar
-    ipcMain.handle("toggle-sidebar", () => {
+    this.handle("toggle-sidebar", () => {
       this.mainWindow.sidebar.toggle();
       this.mainWindow.updateAllBounds();
       return true;
     });
 
     // Chat message
-    ipcMain.handle("sidebar-chat-message", async (_, request) => {
+    this.handle("sidebar-chat-message", async (_, request) => {
       // The LLMClient now handles getting the screenshot and context directly
       await this.mainWindow.sidebar.client.sendChatMessage(request);
     });
 
     // Clear chat
-    ipcMain.handle("sidebar-clear-chat", () => {
+    this.handle("sidebar-clear-chat", () => {
       this.mainWindow.sidebar.client.clearMessages();
       return true;
     });
 
     // Get messages
-    ipcMain.handle("sidebar-get-messages", () => {
+    this.handle("sidebar-get-messages", () => {
       return this.mainWindow.sidebar.client.getMessages();
     });
   }
 
   private handlePageContentEvents(): void {
     // Get page content
-    ipcMain.handle("get-page-content", async () => {
+    this.handle("get-page-content", async () => {
       if (this.mainWindow.activeTab) {
         try {
           return await this.mainWindow.activeTab.getTabHtml();
@@ -298,7 +318,7 @@ export class EventManager {
     });
 
     // Get page text
-    ipcMain.handle("get-page-text", async () => {
+    this.handle("get-page-text", async () => {
       if (this.mainWindow.activeTab) {
         try {
           return await this.mainWindow.activeTab.getTabText();
@@ -311,7 +331,7 @@ export class EventManager {
     });
 
     // Get current URL
-    ipcMain.handle("get-current-url", () => {
+    this.handle("get-current-url", () => {
       if (this.mainWindow.activeTab) {
         return this.mainWindow.activeTab.url;
       }
@@ -321,14 +341,14 @@ export class EventManager {
 
   private handleDarkModeEvents(): void {
     // Dark mode broadcasting
-    ipcMain.on("dark-mode-changed", (event, isDarkMode) => {
+    this.on("dark-mode-changed", (event, isDarkMode) => {
       this.broadcastDarkMode(event.sender, isDarkMode);
     });
   }
 
   private handleDebugEvents(): void {
     // Ping test
-    ipcMain.on("ping", () => console.log("pong"));
+    this.on("ping", () => console.log("pong"));
   }
 
   private broadcastDarkMode(sender: WebContents, isDarkMode: boolean): void {
@@ -357,7 +377,7 @@ export class EventManager {
   }
 
   private handleAnnotationSignalEvents(): void {
-    ipcMain.on('attention:signal', (_event, data) => {
+    this.on('attention:signal', (_event, data) => {
       if (data && data.type === 'annotation:dismissed') {
         this.mainWindow.eventBus.emit('annotation:dismissed', { annotationId: data.annotationId });
       }
@@ -365,7 +385,7 @@ export class EventManager {
   }
 
   private handleSelectionEvents(): void {
-    ipcMain.on('selection:action', async (_event, data: { action: string; text: string; url: string; context: string }) => {
+    this.on('selection:action', async (_event, data: { action: string; text: string; url: string; context: string }) => {
       if (data.action === 'ask') {
         const sidebar = this.mainWindow.sidebar;
         if (!sidebar.getIsVisible()) {
@@ -384,15 +404,12 @@ export class EventManager {
         if (!tab) return;
 
         try {
-          const { streamText } = await import('ai');
-          const { getModel } = await import('./llm-provider');
-
           const result = await streamText({
             model: getModel(),
             messages: [
               {
                 role: 'system',
-                content: 'You are a concise knowledge assistant. Explain the given text in 1-2 short sentences. No emojis. No markdown. Plain text only. Be direct and informative.',
+                content: EXPLAIN_SYSTEM_PROMPT,
               },
               {
                 role: 'user',
@@ -444,11 +461,11 @@ export class EventManager {
   }
 
   private handleHistoryEvents(): void {
-    ipcMain.handle('history:available-browsers', () => {
+    this.handle('history:available-browsers', () => {
       return this.historyImporter.getAvailableBrowsers();
     });
 
-    ipcMain.handle('history:import', async (_event, browserIds: string[]) => {
+    this.handle('history:import', async (_event, browserIds: string[]) => {
       console.log(`[History Import] Starting import for browsers: ${browserIds.join(', ')}`);
       let allEntries: RawHistoryEntry[] = [];
       for (const id of browserIds) {
@@ -474,7 +491,7 @@ export class EventManager {
 
   private handleSynthesisEvents(): void {
     // Handle synthesis request from sidebar
-    ipcMain.handle('synthesis:run', async (_event, tabIds?: string[]) => {
+    this.handle('synthesis:run', async (_event, tabIds?: string[]) => {
       return await this.tabSynthesizer.synthesize(tabIds);
     });
 
@@ -486,7 +503,7 @@ export class EventManager {
 
   private handlePageRewriteEvents(): void {
     // Triggered by a button in the sidebar or topbar to analyze and rewrite the current page
-    ipcMain.handle('page:rewrite', async () => {
+    this.handle('page:rewrite', async () => {
       console.log('[Page Rewrite] Triggered');
       const tab = this.mainWindow.activeTab;
       if (!tab) { console.log('[Page Rewrite] No active tab'); return null; }
@@ -507,7 +524,7 @@ export class EventManager {
     });
 
     // Restore the original page view (remove the AI overlay panel)
-    ipcMain.on('page:restore', () => {
+    this.on('page:restore', () => {
       const tab = this.mainWindow.activeTab;
       if (tab) {
         tab.webContents.send('page:restore', {});
@@ -517,7 +534,7 @@ export class EventManager {
 
   private handleSandboxEvents(): void {
     // Execute a script in an isolated sandbox against the current page's DOM snapshot
-    ipcMain.handle('sandbox:execute', async (_event, data: { script: string }) => {
+    this.handle('sandbox:execute', async (_event, data: { script: string }) => {
       const tab = this.mainWindow.activeTab;
       if (!tab) {
         return {
@@ -555,7 +572,7 @@ export class EventManager {
     });
 
     // Apply sandbox script result to the live page
-    ipcMain.on('sandbox:apply', (_event, data: { script: string }) => {
+    this.on('sandbox:apply', (_event, data: { script: string }) => {
       const tab = this.mainWindow.activeTab;
       if (tab) {
         tab.runJs(data.script);
@@ -564,7 +581,7 @@ export class EventManager {
   }
 
   private handleWorkflowEvents(): void {
-    ipcMain.handle('workflow:start-recording', () => {
+    this.handle('workflow:start-recording', () => {
       console.log('[Workflow] Start recording requested');
       const tab = this.mainWindow.activeTab;
       if (tab) {
@@ -576,7 +593,7 @@ export class EventManager {
       return { recording: false };
     });
 
-    ipcMain.handle('workflow:stop-recording', async () => {
+    this.handle('workflow:stop-recording', async () => {
       console.log('[Workflow] Stop recording requested');
       const recording = this.workflowRecorder.stopRecording();
       if (!recording) { console.log('[Workflow] No recording to stop'); return null; }
@@ -585,14 +602,14 @@ export class EventManager {
       return { recording, summaryPrompt };
     });
 
-    ipcMain.handle('workflow:get-status', () => {
+    this.handle('workflow:get-status', () => {
       return {
         isRecording: this.workflowRecorder.isRecording,
         actionCount: this.workflowRecorder.actionCount,
       };
     });
 
-    ipcMain.handle('workflow:save', async (_event, data: { recording: any; name: string; summary: string }) => {
+    this.handle('workflow:save', async (_event, data: { recording: any; name: string; summary: string }) => {
       try {
         await this.mainWindow.storage.saveWorkflow({
           id: data.recording.id,
@@ -611,7 +628,7 @@ export class EventManager {
     });
 
     // Replay a recorded workflow by executing actions on the active tab
-    ipcMain.handle('workflow:replay', async (_event, actions: any[]) => {
+    this.handle('workflow:replay', async (_event, actions: any[]) => {
       const tab = this.mainWindow.activeTab;
       if (!tab) return { success: false, error: 'No active tab' };
 
@@ -691,6 +708,11 @@ export class EventManager {
     this.annotationManager.stop();
     this.attentionEngine.stop();
     this.tabSynthesizer.stop();
-    ipcMain.removeAllListeners();
+    for (const ch of this.ipcHandleChannels) {
+      ipcMain.removeHandler(ch);
+    }
+    for (const ch of this.ipcOnChannels) {
+      ipcMain.removeAllListeners(ch);
+    }
   }
 }

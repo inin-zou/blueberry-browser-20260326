@@ -14,6 +14,7 @@ describe('AnnotationManager', () => {
     aiEventLog = new AIEventLog()
     mockTab = { webContents: { send: vi.fn() } }
     manager = new AnnotationManager(eventBus, aiEventLog, () => mockTab)
+    manager.setEnabled(true)
     manager.start()
   })
 
