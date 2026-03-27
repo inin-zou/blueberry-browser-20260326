@@ -92,9 +92,30 @@ export function createBrowserTools(getWindow: () => Window | null) {
               el.dispatchEvent(new Event('change', { bubbles: true }));
 
               // Try pressing Enter to submit search
-              el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true }));
+              el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+              el.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+              el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
 
-              return { success: true, typed: ${JSON.stringify(text)}, foundVia: el.placeholder || el.name || el.id || 'fallback' };
+              // Try clicking nearby search/submit buttons
+              var searchBtn = null;
+              var parent = el.parentElement;
+              for (var depth = 0; depth < 5 && parent; depth++) {
+                searchBtn = parent.querySelector('button[type="submit"], button[aria-label*="search"], button[aria-label*="Sök"], button[class*="search"], button[class*="Search"], [role="button"][class*="search"]');
+                if (searchBtn) break;
+                parent = parent.parentElement;
+              }
+              if (searchBtn) {
+                searchBtn.click();
+              }
+
+              // Also try submitting the parent form
+              var form = el.closest('form');
+              if (form) {
+                form.requestSubmit ? form.requestSubmit() : form.submit();
+              }
+
+              var clickedBtn = searchBtn ? (searchBtn.textContent || searchBtn.ariaLabel || 'button').trim().substring(0, 30) : 'none';
+              return { success: true, typed: ${JSON.stringify(text)}, foundVia: el.placeholder || el.name || el.id || 'fallback', searchButtonClicked: clickedBtn, hint: 'Wait 2-3 seconds then use read_page to see results.' };
             })()
           `)
         } catch (err: any) {
